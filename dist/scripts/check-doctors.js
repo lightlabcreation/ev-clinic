@@ -1,8 +1,5 @@
-
 import { PrismaClient } from '@prisma/client';
-
 const prisma = new PrismaClient();
-
 async function checkAndSeedDoctor() {
     try {
         const doctors = await prisma.clinicstaff.findMany({
@@ -12,12 +9,9 @@ async function checkAndSeedDoctor() {
             },
             include: { user: true }
         });
-
         console.log(`Found ${doctors.length} doctors.`);
-
         if (doctors.length === 0) {
             console.log('No doctors found. Creating Dr. Strange...');
-
             // Create User
             const user = await prisma.user.upsert({
                 where: { email: 'doctor@ev.com' },
@@ -29,9 +23,7 @@ async function checkAndSeedDoctor() {
                     phone: '+15555555555',
                     role: 'DOCTOR'
                 }
-
             });
-
             // Create Staff Entry
             await prisma.clinicstaff.create({
                 data: {
@@ -41,16 +33,17 @@ async function checkAndSeedDoctor() {
                     department: 'General'
                 }
             });
-
             console.log('Doctor created!');
-        } else {
+        }
+        else {
             console.log('Doctors exist:', doctors.map(d => d.user.name));
         }
-    } catch (error) {
+    }
+    catch (error) {
         console.error('Error:', error);
-    } finally {
+    }
+    finally {
         await prisma.$disconnect();
     }
 }
-
 checkAndSeedDoctor();
