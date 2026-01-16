@@ -1,40 +1,53 @@
-import express from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
 import { PrismaClient } from '@prisma/client';
 
-import authRoutes from './routes/auth.routes';
-import superRoutes from './routes/super.routes';
-import receptionRoutes from './routes/reception.routes';
-import doctorRoutes from './routes/doctor.routes';
-import billingRoutes from './routes/billing.routes';
-import clinicRoutes from './routes/clinic.routes';
-import departmentRoutes from './routes/department.routes';
-import patientRoutes from './routes/patient.routes';
-import formsRoutes from './routes/forms.routes';
+import authRoutes from './routes/auth.routes.js';
+import superRoutes from './routes/super.routes.js';
+import receptionRoutes from './routes/reception.routes.js';
+import doctorRoutes from './routes/doctor.routes.js';
+import billingRoutes from './routes/billing.routes.js';
+import clinicRoutes from './routes/clinic.routes.js';
+import departmentRoutes from './routes/department.routes.js';
+import patientRoutes from './routes/patient.routes.js';
+import formsRoutes from './routes/forms.routes.js';
 
-import { startTime } from './utils/system';
+import { startTime } from './utils/system.js';
 
 dotenv.config();
 
 const app = express();
-const prisma = new PrismaClient();
-const PORT = process.env.PORT || 5000;
+export const prisma = new PrismaClient();
 
-// Security Middlewares
+const PORT = Number(process.env.PORT) || 5000;
+
+/* -------------------- MIDDLEWARES -------------------- */
+
 app.use(helmet());
-app.use(cors({
-    origin: 'http://localhost:5173',
+
+app.use(
+  cors({
+    origin: process.env.FRONTEND_URL || true, // ✅ Railway + Local both
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-clinic-id']
-}));
-app.use(morgan('dev'));
-app.use(express.json());
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'X-Requested-With',
+      'x-clinic-id'
+    ]
+  })
+);
 
-// Routes
+app.use(morgan('dev'));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true }));
+
+/* -------------------- ROUTES -------------------- */
+
 app.use('/api/auth', authRoutes);
 app.use('/api/super', superRoutes);
 app.use('/api/reception', receptionRoutes);
@@ -45,31 +58,56 @@ app.use('/api/departments', departmentRoutes);
 app.use('/api/patient', patientRoutes);
 app.use('/api/forms', formsRoutes);
 
-// Health Check
-app.get('/health', (req, res) => {
-    res.status(200).json({ success: true, message: 'Exclusive Vision HIS API is fully operational' });
+/* -------------------- HEALTH CHECK -------------------- */
+
+app.get('/health', (_req: Request, res: Response) => {
+  res.status(200).json({
+    success: true,
+    message: 'Exclusive Vision HIS API is fully operational 🚀'
+  });
 });
 
-// Global Error Handler
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+/* -------------------- GLOBAL ERROR HANDLER -------------------- */
+
+app.use(
+  (err: any, _req: Request, res: Response, _next: NextFunction) => {
     const statusCode = err.statusCode || 500;
+
     res.status(statusCode).json({
-        success: false,
-        status: err.status || 'error',
-        message: err.message || 'An unexpected error occurred on the server',
-        error: process.env.NODE_ENV === 'development' ? err : undefined
+      success: false,
+      status: err.status || 'error',
+      message: err.message || 'Internal Server Error',
+      error: process.env.NODE_ENV === 'development' ? err : undefined
     });
+  }
+);
+
+/* -------------------- SERVER START -------------------- */
+
+const server = app.listen(PORT, () => {
+  console.log(`
+🚀 EV Clinic HIS Backend
+--------------------------------
+Status : RUNNING
+Port   : ${PORT}
+Env    : ${process.env.NODE_ENV || 'production'}
+Started: ${startTime}
+--------------------------------
+`);
 });
 
-app.listen(PORT, () => {
-    console.log(`
-  🚀 EV Clinic HIS Backend
-  -----------------------
-  Status: Operational
-  Port: ${PORT}
-  Mode: ${process.env.NODE_ENV}
-  -----------------------
-  `);
+/* -------------------- GRACEFUL SHUTDOWN -------------------- */
+
+process.on('SIGTERM', async () => {
+  console.log('SIGTERM received. Shutting down gracefully...');
+  await prisma.$disconnect();
+  server.close(() => process.exit(0));
 });
 
-export { prisma, startTime };
+process.on('SIGINT', async () => {
+  console.log('SIGINT received. Shutting down gracefully...');
+  await prisma.$disconnect();
+  process.exit(0);
+});
+
+export default app;
