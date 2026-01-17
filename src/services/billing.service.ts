@@ -1,4 +1,4 @@
-import { prisma } from '../server';
+import { prisma } from '../server.js';
 
 export const getInvoices = async (clinicId: number) => {
     return await prisma.invoice.findMany({

@@ -1,7 +1,7 @@
 import { Response } from 'express';
-import { AuthRequest } from '../middlewares/auth';
-import * as billingService from '../services/billing.service';
-import { asyncHandler } from '../utils/asyncHandler';
+import { AuthRequest } from '../middlewares/auth.js';
+import * as billingService from '../services/billing.service.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
 
 export const getInvoices = asyncHandler(async (req: AuthRequest, res: Response) => {
     const invoices = await billingService.getInvoices(req.clinicId!);

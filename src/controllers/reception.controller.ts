@@ -1,7 +1,7 @@
 import { Response } from 'express';
-import { AuthRequest } from '../middlewares/auth';
-import * as receptionService from '../services/reception.service';
-import { asyncHandler } from '../utils/asyncHandler';
+import { AuthRequest } from '../middlewares/auth.js';
+import * as receptionService from '../services/reception.service.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
 
 export const getPatients = asyncHandler(async (req: AuthRequest, res: Response) => {
     const patients = await receptionService.getPatientsByClinic(req.user!.clinicId!, req.query.search as string);

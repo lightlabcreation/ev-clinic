@@ -1,5 +1,5 @@
-import { prisma } from '../server';
-import { AppError } from '../utils/AppError';
+import { prisma } from '../server.js';
+import { AppError } from '../utils/AppError.js';
 import bcrypt from 'bcryptjs';
 
 export const getClinicStats = async (clinicId: number) => {

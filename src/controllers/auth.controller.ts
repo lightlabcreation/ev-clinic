@@ -1,7 +1,7 @@
 import { Response } from 'express';
-import { AuthRequest } from '../middlewares/auth';
-import * as authService from '../services/auth.service';
-import { asyncHandler } from '../utils/asyncHandler';
+import { AuthRequest } from '../middlewares/auth.js';
+import * as authService from '../services/auth.service.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
 
 const getClientInfo = (req: any) => {
     const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';

@@ -1,7 +1,7 @@
 import { Response } from 'express';
-import { AuthRequest } from '../middlewares/auth';
-import * as clinicService from '../services/clinic.service';
-import { asyncHandler } from '../utils/asyncHandler';
+import { AuthRequest } from '../middlewares/auth.js';
+import * as clinicService from '../services/clinic.service.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
 
 export const getClinicStats = asyncHandler(async (req: AuthRequest, res: Response) => {
     const stats = await clinicService.getClinicStats(req.clinicId!);

@@ -1,5 +1,5 @@
-import { prisma } from '../server';
-import { AppError } from '../utils/AppError';
+import { prisma } from '../server.js';
+import { AppError } from '../utils/AppError.js';
 
 export const getPatientsByClinic = async (clinicId: number, search?: string) => {
     return await prisma.patient.findMany({

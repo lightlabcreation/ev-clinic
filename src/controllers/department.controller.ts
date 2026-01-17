@@ -1,7 +1,7 @@
 import { Response, NextFunction } from 'express';
-import { AuthRequest } from '../middlewares/auth';
-import * as departmentService from '../services/department.service';
-import { asyncHandler } from '../utils/asyncHandler';
+import { AuthRequest } from '../middlewares/auth.js';
+import * as departmentService from '../services/department.service.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
 
 export const getDepartments = asyncHandler(async (req: AuthRequest, res: Response) => {
     const departments = await departmentService.getDepartments(Number(req.clinicId));

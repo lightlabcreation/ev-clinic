@@ -1,8 +1,8 @@
 import { Response } from 'express';
-import { AuthRequest } from '../middlewares/auth';
-import * as doctorService from '../services/doctor.service';
-import { asyncHandler } from '../utils/asyncHandler';
-import { prisma } from '../server';
+import { AuthRequest } from '../middlewares/auth.js';
+import * as doctorService from '../services/doctor.service.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
+import { prisma } from '../server.js';
 
 const resolveDoctorId = async (userId: number, clinicId: number) => {
     const staff = await prisma.clinicstaff.findFirst({

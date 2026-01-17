@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
-import { prisma } from '../server';
-import { AppError } from '../utils/AppError';
-import { startTime } from '../utils/system';
+import { prisma } from '../server.js';
+import { AppError } from '../utils/AppError.js';
+import { startTime } from '../utils/system.js';
 
 // ==================== CLINICS ====================
 export const createClinic = async (data: any) => {

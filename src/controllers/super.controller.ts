@@ -1,7 +1,7 @@
 import { Response } from 'express';
-import { AuthRequest } from '../middlewares/auth';
-import * as superService from '../services/super.service';
-import { asyncHandler } from '../utils/asyncHandler';
+import { AuthRequest } from '../middlewares/auth.js';
+import * as superService from '../services/super.service.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
 
 // ==================== CLINICS ====================
 export const createClinic = asyncHandler(async (req: AuthRequest, res: Response) => {
@@ -108,7 +108,7 @@ export const impersonateClinic = asyncHandler(async (req: AuthRequest, res: Resp
     const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
     const clientDevice = req.headers['user-agent'] || 'unknown';
 
-    const result = await import('../services/auth.service').then(m => m.impersonateClinic(
+    const result = await import('../services/auth.service.js').then(m => m.impersonateClinic(
         req.user!.id,
         req.body.clinicId,
         String(clientIp),
@@ -126,7 +126,7 @@ export const impersonateUser = asyncHandler(async (req: AuthRequest, res: Respon
     const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
     const clientDevice = req.headers['user-agent'] || 'unknown';
 
-    const result = await import('../services/auth.service').then(m => m.impersonate(
+    const result = await import('../services/auth.service.js').then(m => m.impersonate(
         req.user!.id,
         req.body.userId,
         String(clientIp),

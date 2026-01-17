@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
-import { prisma } from '../server';
-import { AppError } from '../utils/AppError';
+import { prisma } from '../server.js';
+import { AppError } from '../utils/AppError.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';

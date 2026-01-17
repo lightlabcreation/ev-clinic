@@ -1,10 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
-import * as patientService from '../services/patient.service';
+import * as patientService from '../services/patient.service.js';
 // We can use the AuthRequest interface from auth middleware or just cast to any for simplicity in this file
 // ensuring we don't need to circle-back import if not strictly necessary, 
 // but importing AuthRequest is better practice. 
 // For now, let's use 'as any' pattern consistent with other controllers if they exist, or just import AuthRequest.
-import { AuthRequest } from '../middlewares/auth';
+import { AuthRequest } from '../middlewares/auth.js';
 
 export const getMyAppointments = async (req: Request, res: Response, next: NextFunction) => {
     try {
