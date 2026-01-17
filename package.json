@@ -2,7 +2,7 @@
   "name": "backend",
   "version": "1.0.0",
   "main": "dist/server.js",
-
+  "type": "module",
   "scripts": {
     "dev": "nodemon --exec tsx src/server.ts",
     "build": "npx tsc",
@@ -11,7 +11,6 @@
     "prisma:migrate": "prisma migrate deploy",
     "seed": "tsx prisma/seed.ts"
   },
-
   "dependencies": {
     "express": "^5.2.1",
     "cors": "^2.8.5",
@@ -24,7 +23,6 @@
     "prisma": "^5.22.0",
     "@prisma/client": "^5.22.0"
   },
-
   "devDependencies": {
     "typescript": "^5.3.3",
     "@types/node": "^25.0.8",
