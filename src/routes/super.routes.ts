@@ -1,8 +1,8 @@
 import { Router } from 'express';
-import * as superController from '../controllers/super.controller';
-import { protect, restrictTo } from '../middlewares/auth';
-import { validate } from '../middlewares/validate';
-import { createClinicSchema, createStaffSchema } from '../validations/super.validation';
+import * as superController from '../controllers/super.controller.js';
+import { protect, restrictTo } from '../middlewares/auth.js';
+import { validate } from '../middlewares/validate.js';
+import { createClinicSchema, createStaffSchema } from '../validations/super.validation.js';
 
 const router = Router();
 

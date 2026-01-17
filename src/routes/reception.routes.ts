@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import * as receptionController from '../controllers/reception.controller';
-import { protect, restrictTo, ensureClinicContext } from '../middlewares/auth';
+import * as receptionController from '../controllers/reception.controller.js';
+import { protect, restrictTo, ensureClinicContext } from '../middlewares/auth.js';
 
 const router = Router();
 
