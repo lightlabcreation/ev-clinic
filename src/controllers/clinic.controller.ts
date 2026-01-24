@@ -57,3 +57,9 @@ export const updateBookingConfig = asyncHandler(async (req: AuthRequest, res: Re
     const config = await clinicService.updateBookingConfig(req.clinicId!, req.body.config);
     res.status(200).json({ success: true, message: 'Booking configuration updated successfully', data: config });
 });
+
+export const resetPassword = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { password } = req.body;
+    await clinicService.resetUserPassword(req.clinicId!, Number(req.params.id), password);
+    res.status(200).json({ success: true, message: 'Password reset successfully' });
+});

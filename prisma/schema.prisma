@@ -68,6 +68,13 @@ model clinic {
   notification  notification[]
   patient       patient[]
   formresponse  formresponse[]
+  subscriptionPlan  String          @default("Monthly")
+  subscriptionStart DateTime?
+  subscriptionEnd   DateTime?
+  isActive          Boolean         @default(true)
+  inventory         inventory[]
+  service_order     service_order[]
+  subscriptionInvoices subscription_invoice[]
 }
 
 model clinicstaff {
@@ -106,7 +113,7 @@ model formtemplate {
   version       Int             @default(1)
   fields        String          @db.LongText
   createdAt     DateTime        @default(now())
-  updatedAt     DateTime  @default(now()) @updatedAt
+  updatedAt     DateTime        @default(now()) @updatedAt
   clinic        clinic?         @relation(fields: [clinicId], references: [id], map: "FormTemplate_clinicId_fkey")
   medicalrecord medicalrecord[]
   formresponse  formresponse[]
@@ -145,8 +152,8 @@ model medicalrecord {
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @default(now()) @updatedAt
   clinic       clinic        @relation(fields: [clinicId], references: [id], map: "MedicalRecord_clinicId_fkey")
-  patient       patient       @relation(fields: [patientId], references: [id], map: "MedicalRecord_patientId_fkey")
-  formtemplate  formtemplate? @relation(fields: [templateId], references: [id], map: "MedicalRecord_templateId_fkey")
+  patient      patient       @relation(fields: [patientId], references: [id], map: "MedicalRecord_patientId_fkey")
+  formtemplate formtemplate? @relation(fields: [templateId], references: [id], map: "MedicalRecord_templateId_fkey")
 
   @@index([clinicId], map: "MedicalRecord_clinicId_fkey")
   @@index([patientId], map: "MedicalRecord_patientId_fkey")
@@ -207,9 +214,42 @@ model patient {
   invoice               invoice[]
   medicalrecord         medicalrecord[]
   formresponse          formresponse[]
+  service_order         service_order[]
   clinic                clinic          @relation(fields: [clinicId], references: [id], map: "Patient_clinicId_fkey")
 
   @@unique([clinicId, mrn], map: "Patient_clinicId_mrn_key")
+}
+
+model inventory {
+  id         Int       @id @default(autoincrement())
+  clinicId   Int
+  name       String
+  sku        String?
+  quantity   Int       @default(0)
+  unitPrice  Decimal   @db.Decimal(10, 2)
+  expiryDate DateTime?
+  updatedAt  DateTime  @default(now()) @updatedAt
+  clinic     clinic    @relation(fields: [clinicId], references: [id])
+
+  @@index([clinicId])
+}
+
+model service_order {
+  id        Int      @id @default(autoincrement())
+  clinicId  Int
+  patientId Int
+  doctorId  Int
+  type      String
+  testName  String
+  status    String   @default("Pending")
+  result    String?  @db.LongText
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+  clinic    clinic   @relation(fields: [clinicId], references: [id])
+  patient   patient  @relation(fields: [patientId], references: [id])
+
+  @@index([clinicId])
+  @@index([patientId])
 }
 
 model user {
@@ -225,8 +265,35 @@ model user {
   failedLoginAttempts Int           @default(0)
   lockoutUntil        DateTime?
   role                user_role     @default(RECEPTIONIST)
+  otp                 String?
+  otpExpiry           DateTime?
   auditlog            auditlog[]
   clinicstaff         clinicstaff[]
+}
+
+
+
+model subscription_invoice {
+  id            Int      @id @default(autoincrement())
+  clinicId      Int
+  invoiceNumber String   @unique
+  amount        Decimal  @db.Decimal(10, 2)
+  status        String   @default("Unpaid")
+  issuedDate    DateTime @default(now())
+  dueDate       DateTime
+  paidDate      DateTime?
+  description   String?
+  clinic        clinic   @relation(fields: [clinicId], references: [id])
+
+  @@index([clinicId])
+}
+
+model system_settings {
+  id                Int      @id @default(autoincrement())
+  key               String   @unique
+  value             String   @db.LongText
+  description       String?
+  updatedAt         DateTime @default(now()) @updatedAt
 }
 
 enum clinicstaff_role {
@@ -234,6 +301,10 @@ enum clinicstaff_role {
   ADMIN
   DOCTOR
   RECEPTIONIST
+  PHARMACY
+  LAB
+  RADIOLOGY
+  ACCOUNTANT
   PATIENT
 }
 
@@ -242,5 +313,9 @@ enum user_role {
   ADMIN
   DOCTOR
   RECEPTIONIST
+  PHARMACY
+  LAB
+  RADIOLOGY
+  ACCOUNTANT
   PATIENT
 }

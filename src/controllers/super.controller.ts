@@ -94,6 +94,11 @@ export const updateSecuritySettings = asyncHandler(async (req: AuthRequest, res:
     res.status(200).json({ success: true, message: 'Security settings updated', data: result });
 });
 
+export const updateSMTPSettings = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const result = await superService.updateSystemSettings('smtp', req.body);
+    res.status(200).json({ success: true, message: 'SMTP settings updated', data: result });
+});
+
 export const getStorageStats = asyncHandler(async (req: AuthRequest, res: Response) => {
     const stats = await superService.getStorageStats();
     res.status(200).json({ success: true, data: stats });
@@ -138,4 +143,48 @@ export const impersonateUser = asyncHandler(async (req: AuthRequest, res: Respon
         message: 'User impersonation successful',
         data: result
     });
+});
+
+export const generateInvoice = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { clinicId, amount, description } = req.body;
+    const invoice = await superService.generateClinicInvoice(Number(clinicId), Number(amount), description);
+    res.status(201).json({ success: true, message: 'Invoice generated', data: invoice });
+});
+
+export const getReports = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { startDate, endDate } = req.query;
+    const report = await superService.getSuperAdminReports(startDate as string, endDate as string);
+    res.status(200).json({ success: true, data: report });
+});
+
+export const getInvoices = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { clinicId, status, startDate, endDate } = req.query;
+    const invoices = await superService.getInvoices({
+        clinicId: clinicId ? Number(clinicId) : undefined,
+        status: status as string,
+        startDate: startDate as string,
+        endDate: endDate as string
+    });
+    res.status(200).json({ success: true, data: invoices });
+});
+
+export const getClinicInsights = asyncHandler(async (req: AuthRequest, res: Response) => {
+    try {
+        const insights = await superService.getClinicInsights(Number(req.params.id));
+        res.status(200).json({ success: true, data: insights });
+    } catch (error) {
+        console.error('Error in getClinicInsights:', error);
+        throw error;
+    }
+});
+
+export const resetUserPassword = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { userId, password } = req.body;
+    await superService.resetClinicAdminPassword(Number(userId), password);
+    res.status(200).json({ success: true, message: 'Password reset successfully' });
+});
+
+export const updateSubscription = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const clinic = await superService.updateClinicSubscription(Number(req.params.id), req.body);
+    res.status(200).json({ success: true, message: 'Subscription updated successfully', data: clinic });
 });

@@ -12,9 +12,20 @@ const getClientInfo = (req: any) => {
 export const login = asyncHandler(async (req: AuthRequest, res: Response) => {
     const { ip, device } = getClientInfo(req);
     const result = await authService.login(req.body, ip, device);
+    console.log('Login backend result:', JSON.stringify(result, null, 2));
     res.status(200).json({
         success: true,
-        message: 'Login successful',
+        message: 'Verification code sent to email',
+        data: result
+    });
+});
+
+export const verifyOTP = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { ip, device } = getClientInfo(req);
+    const result = await authService.verifyOTP(req.body, ip, device);
+    res.status(200).json({
+        success: true,
+        message: 'Verification successful',
         data: result
     });
 });

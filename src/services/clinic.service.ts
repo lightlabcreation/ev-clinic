@@ -349,3 +349,28 @@ export const updateBookingConfig = async (clinicId: number, config: any) => {
 
     return updated.bookingConfig ? JSON.parse(updated.bookingConfig) : null;
 };
+
+export const resetUserPassword = async (clinicId: number, userId: number, password: string) => {
+    const staff = await prisma.clinicstaff.findFirst({
+        where: { userId, clinicId }
+    });
+    if (!staff) throw new AppError('User does not belong to this clinic', 403);
+
+    const hashedPassword = await bcrypt.hash(password, 12);
+    await prisma.user.update({
+        where: { id: userId },
+        data: { password: hashedPassword }
+    });
+
+    await prisma.auditlog.create({
+        data: {
+            action: 'Password Reset',
+            performedBy: 'ADMIN',
+            userId: userId,
+            clinicId,
+            details: JSON.stringify({ note: 'Admin reset password' })
+        }
+    });
+
+    return { success: true };
+};

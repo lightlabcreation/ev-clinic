@@ -17,4 +17,6 @@ router.post('/appointments', restrictTo('RECEPTIONIST', 'ADMIN'), receptionContr
 
 router.patch('/appointments/:id/status', restrictTo('RECEPTIONIST', 'ADMIN'), receptionController.updateApptStatus);
 
+router.patch('/patients/:id/password', restrictTo('RECEPTIONIST', 'ADMIN'), receptionController.resetPassword);
+
 export default router;

@@ -37,3 +37,8 @@ export const getActivities = asyncHandler(async (req: AuthRequest, res: Response
     const activities = await receptionService.getReceptionActivities(req.user!.clinicId!);
     res.status(200).json({ status: 'success', data: activities });
 });
+
+export const resetPassword = asyncHandler(async (req: AuthRequest, res: Response) => {
+    await receptionService.resetPatientPassword(Number(req.params.id), req.body.password);
+    res.status(200).json({ status: 'success', message: 'Password reset successfully' });
+});

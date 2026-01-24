@@ -13,6 +13,7 @@ router.post('/assessments', doctorController.createAssessment);
 router.get('/history/:patientId', doctorController.getHistory);
 router.get('/templates', doctorController.getTemplates);
 router.get('/patients', doctorController.getPatients);
+router.post('/orders', doctorController.createOrder);
 router.get('/orders', doctorController.getOrders);
 router.get('/revenue', doctorController.getRevenue);
 

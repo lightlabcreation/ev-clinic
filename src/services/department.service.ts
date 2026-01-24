@@ -23,10 +23,27 @@ export const deleteDepartment = async (id: number) => {
 };
 
 export const updateNotificationStatus = async (id: number, status: string) => {
-    return await prisma.notification.update({
+    const notification = await prisma.notification.update({
         where: { id },
         data: { status }
     });
+
+    // If marked as completed, try to update the linked Service Order
+    if (status === 'completed' && notification.message) {
+        try {
+            const msg = typeof notification.message === 'string' ? JSON.parse(notification.message) : notification.message;
+            if (msg.orderId) {
+                await prisma.service_order.update({
+                    where: { id: Number(msg.orderId) },
+                    data: { status: 'Completed' }
+                });
+            }
+        } catch (e) {
+            console.error('Failed to update linked service order:', e);
+        }
+    }
+
+    return notification;
 };
 
 export const getNotifications = async (clinicId: number) => {

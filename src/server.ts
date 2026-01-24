@@ -86,7 +86,7 @@ app.use(
 
 const server = app.listen(PORT, () => {
   console.log(`
-🚀 EV Clinic HIS Backend
+🚀 EV Clinic HIS Backend (Restarted)
 --------------------------------
 Status : RUNNING
 Port   : ${PORT}

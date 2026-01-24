@@ -4,194 +4,246 @@ import bcrypt from 'bcryptjs';
 const prisma = new PrismaClient();
 
 async function main() {
-    console.log('🌱 Seeding database with dummy data...');
+    console.log('🌱 Starting Clean Seed...');
 
-    // 1. Create Clinics
-    const husri = await prisma.clinic.upsert({
-        where: { subdomain: 'husri' },
-        update: {},
-        create: {
-            name: 'Husri Clinic',
-            subdomain: 'husri',
-            location: 'Downtown Medical Center',
-            contact: '+1 (555) 123-4567',
-            email: 'contact@husri.com',
+    // 1. Clean Database (Delete in order of dependencies)
+    console.log('🧹 Cleaning existing data...');
+    await prisma.service_order.deleteMany();
+    await prisma.inventory.deleteMany();
+    await prisma.invoice.deleteMany();
+    await prisma.medicalrecord.deleteMany();
+    await prisma.formresponse.deleteMany();
+    await prisma.appointment.deleteMany();
+    await prisma.notification.deleteMany();
+    await prisma.clinicstaff.deleteMany();
+    await prisma.department.deleteMany();
+    await prisma.formtemplate.deleteMany();
+    await prisma.auditlog.deleteMany();
+    await prisma.patient.deleteMany();
+    await prisma.clinic.deleteMany();
+    await prisma.user.deleteMany();
+
+    console.log('✅ Database cleaned.');
+
+    // 2. Create Global Password
+    const passwordHash = await bcrypt.hash('password123', 12);
+    // Specific password for super admin to match user request if needed, but 'password123' is standard for dev. 
+    // User asked for "admin123" in previous context, check login: 'superadmin@ev.com' / 'admin123'
+    const adminPasswordHash = await bcrypt.hash('admin123', 12);
+
+    // 3. Create Super Admin User
+    console.log('👤 Creating Super Admin...');
+    const superAdminUser = await prisma.user.create({
+        data: {
+            email: 'superadmin@ev.com',
+            password: adminPasswordHash,
+            name: 'Super Admin',
+            role: 'SUPER_ADMIN',
+            status: 'active'
+        }
+    });
+
+    // 4. Create The ONE Clinic
+    console.log('🏥 Creating Exclusive Vision Clinic...');
+    // Subscription details: Monthly plan, active, starts now, ends in 1 month
+    const startDate = new Date();
+    const endDate = new Date();
+    endDate.setMonth(endDate.getMonth() + 1);
+
+    const clinic = await prisma.clinic.create({
+        data: {
+            name: 'Exclusive Vision Clinic',
+            subdomain: 'ev-clinic',
+            location: 'Main Health Hub, New York',
+            contact: '+1 (555) 000-0001',
+            email: 'admin@ev-clinic.com',
             status: 'active',
-            modules: { pharmacy: true, radiology: true, laboratory: true, billing: true }
+            modules: JSON.stringify({
+                pharmacy: true,
+                radiology: true,
+                laboratory: true,
+                billing: true
+            }),
+            subscriptionPlan: 'Monthly',
+            subscriptionStart: startDate,
+            subscriptionEnd: endDate,
+            isActive: true,
+            bookingConfig: JSON.stringify({
+                slotDuration: 30,
+                startHour: 9,
+                endHour: 17,
+                days: [1, 2, 3, 4, 5] // Mon-Fri
+            })
         }
     });
 
-    const skaf = await prisma.clinic.upsert({
-        where: { subdomain: 'skaf' },
-        update: {},
-        create: {
-            name: 'Skaf Clinic',
-            subdomain: 'skaf',
-            location: 'Westside Health Plaza',
-            contact: '+1 (555) 234-5678',
-            email: 'contact@skaf.com',
-            status: 'active',
-            modules: { pharmacy: true, radiology: false, laboratory: true, billing: true }
-        }
-    });
-
-    // 2. Create Users
-    const passwordHash = await bcrypt.hash('admin123', 12);
-    const doctorHash = await bcrypt.hash('doctor123', 12);
-    const receptionHash = await bcrypt.hash('reception123', 12);
-
-    const superAdmin = await prisma.user.upsert({
-        where: { email: 'superadmin@ev.com' },
-        update: { password: passwordHash, name: 'Super Admin', role: 'SUPER_ADMIN', failedLoginAttempts: 0, lockoutUntil: null },
-        create: { email: 'superadmin@ev.com', password: passwordHash, name: 'Super Admin', role: 'SUPER_ADMIN' }
-    });
-
-    const husriAdmin = await prisma.user.upsert({
-        where: { email: 'admin@husri.com' },
-        update: { password: passwordHash, name: 'Husri Admin', role: 'ADMIN', failedLoginAttempts: 0, lockoutUntil: null },
-        create: { email: 'admin@husri.com', password: passwordHash, name: 'Husri Admin', role: 'ADMIN' }
-    });
-
-    const doctor = await prisma.user.upsert({
-        where: { email: 'doctor@husri.com' },
-        update: { password: doctorHash, name: 'Dr. Ahmed Khan', role: 'DOCTOR', failedLoginAttempts: 0, lockoutUntil: null },
-        create: { email: 'doctor@husri.com', password: doctorHash, name: 'Dr. Ahmed Khan', role: 'DOCTOR' }
-    });
-
-    const reception = await prisma.user.upsert({
-        where: { email: 'reception@husri.com' },
-        update: { password: receptionHash, name: 'Sarah Johnson', role: 'RECEPTIONIST', failedLoginAttempts: 0, lockoutUntil: null },
-        create: { email: 'reception@husri.com', password: receptionHash, name: 'Sarah Johnson', role: 'RECEPTIONIST' }
-    });
-
-    // 3. Assign Staff Roles
-    await prisma.clinicStaff.upsert({
-        where: { userId_clinicId_role: { userId: superAdmin.id, clinicId: husri.id, role: 'SUPER_ADMIN' } },
-        update: {},
-        create: { userId: superAdmin.id, clinicId: husri.id, role: 'SUPER_ADMIN' }
-    });
-
-    await prisma.clinicStaff.upsert({
-        where: { userId_clinicId_role: { userId: husriAdmin.id, clinicId: husri.id, role: 'ADMIN' } },
-        update: {},
-        create: { userId: husriAdmin.id, clinicId: husri.id, role: 'ADMIN' }
-    });
-
-    await prisma.clinicStaff.upsert({
-        where: { userId_clinicId_role: { userId: doctor.id, clinicId: husri.id, role: 'DOCTOR' } },
-        update: {},
-        create: { userId: doctor.id, clinicId: husri.id, role: 'DOCTOR' }
-    });
-
-    await prisma.clinicStaff.upsert({
-        where: { userId_clinicId_role: { userId: reception.id, clinicId: husri.id, role: 'RECEPTIONIST' } },
-        update: {},
-        create: { userId: reception.id, clinicId: husri.id, role: 'RECEPTIONIST' }
-    });
-
-    // 4. Create Patients
-    const patient1 = await prisma.patient.upsert({
-        where: { clinicId_mrn: { clinicId: husri.id, mrn: 'MRN001' } },
-        update: {},
-        create: {
-            clinicId: husri.id,
-            mrn: 'MRN001',
-            name: 'John Doe',
-            age: 35,
-            phone: '555-0101',
-            gender: 'Male',
-            status: 'Active'
-        }
-    });
-
-    const patient2 = await prisma.patient.upsert({
-        where: { clinicId_mrn: { clinicId: husri.id, mrn: 'MRN002' } },
-        update: {},
-        create: {
-            clinicId: husri.id,
-            mrn: 'MRN002',
-            name: 'Jane Smith',
-            age: 28,
-            phone: '555-0102',
-            gender: 'Female',
-            status: 'Active'
-        }
-    });
-
-    // 5. Create Appointments
-    await prisma.appointment.create({
-        data: {
-            clinicId: husri.id,
-            patientId: patient1.id,
-            doctorId: doctor.id,
-            date: new Date(),
-            time: '10:00 AM',
-            status: 'Checked In',
-            source: 'Call'
-        }
-    });
-
-    await prisma.appointment.create({
-        data: {
-            clinicId: husri.id,
-            patientId: patient2.id,
-            doctorId: doctor.id,
-            date: new Date(),
-            time: '11:30 AM',
-            status: 'Pending',
-            source: 'Walk-in'
-        }
-    });
-
-    // 6. Create Form Templates
-    const generalTemplate = await prisma.formTemplate.create({
-        data: {
-            name: 'General Consultation',
-            clinicId: husri.id,
-            specialty: 'General Medicine',
-            fields: [
-                { id: 'chief_complaint', label: 'Chief Complaint', type: 'text', required: true },
-                { id: 'vitals_temp', label: 'Temperature (C)', type: 'number', required: false },
-                { id: 'vitals_bp', label: 'Blood Pressure', type: 'text', required: false },
-                { id: 'diagnosis', label: 'Working Diagnosis', type: 'text', required: true },
-                { id: 'plan', label: 'Treatment Plan', type: 'text', required: true }
-            ]
-        }
-    });
-
-    // 7. Create Medical Records (History)
-    await prisma.medicalRecord.create({
-        data: {
-            clinicId: husri.id,
-            patientId: patient1.id,
-            doctorId: doctor.id,
-            templateId: generalTemplate.id,
-            type: 'General Consultation',
+    // 5. Create Departments
+    console.log('🏢 Creating Departments...');
+    const depts = ['General Practice', 'Pharmacy', 'Laboratory', 'Radiology', 'Accounts', 'Reception'];
+    for (const d of depts) {
+        await prisma.department.create({
             data: {
-                chief_complaint: 'Seasonal allergies and mild headache',
-                vitals_temp: '37.2',
-                vitals_bp: '120/80',
-                diagnosis: 'Allergic Rhinitis',
-                plan: 'Claritin 10mg once daily for 7 days'
-            },
-            isClosed: true
-        }
-    });
+                clinicId: clinic.id,
+                name: d,
+                type: d === 'General Practice' ? 'CLINICAL' : 'ADMINISTRATIVE'
+            }
+        });
+    }
 
-    // 8. Create Notifications (Pending Orders)
-    await prisma.notification.create({
+    // 6. Create Clinic Staff Users
+    console.log('👥 Creating Clinic Staff...');
+
+    // Clinic Admin
+    const clinicAdminUser = await prisma.user.create({
         data: {
-            clinicId: husri.id,
-            department: 'pharmacy',
-            message: {
-                patientId: patient1.id,
-                details: 'Claritin 10mg x 7 days'
-            },
-            status: 'pending'
+            email: 'admin@ev-clinic.com',
+            password: adminPasswordHash, // Use same standard password
+            name: 'Clinic Admin',
+            role: 'ADMIN',
+            status: 'active'
+        }
+    });
+    await prisma.clinicstaff.create({
+        data: {
+            userId: clinicAdminUser.id,
+            clinicId: clinic.id,
+            role: 'ADMIN',
+            department: 'Administration'
         }
     });
 
-    console.log('✅ Seeding complete!');
+    // Doctor
+    const doctorUser = await prisma.user.create({
+        data: {
+            email: 'doctor@ev-clinic.com',
+            password: adminPasswordHash,
+            name: 'Dr. John Smith',
+            role: 'DOCTOR',
+            status: 'active'
+        }
+    });
+    await prisma.clinicstaff.create({
+        data: {
+            userId: doctorUser.id,
+            clinicId: clinic.id,
+            role: 'DOCTOR',
+            department: 'General Practice',
+            specialty: 'Cardiology'
+        }
+    });
+
+    // Receptionist
+    const receptionUser = await prisma.user.create({
+        data: {
+            email: 'reception@ev-clinic.com',
+            password: adminPasswordHash,
+            name: 'Sarah Receptionist',
+            role: 'RECEPTIONIST',
+            status: 'active'
+        }
+    });
+    await prisma.clinicstaff.create({
+        data: {
+            userId: receptionUser.id,
+            clinicId: clinic.id,
+            role: 'RECEPTIONIST',
+            department: 'Reception'
+        }
+    });
+
+    // Pharmacist
+    const pharmacyUser = await prisma.user.create({
+        data: {
+            email: 'pharmacy@ev-clinic.com',
+            password: adminPasswordHash,
+            name: 'Paul Pharmacist',
+            role: 'PHARMACY',
+            status: 'active'
+        }
+    });
+    await prisma.clinicstaff.create({
+        data: {
+            userId: pharmacyUser.id,
+            clinicId: clinic.id,
+            role: 'PHARMACY',
+            department: 'Pharmacy'
+        }
+    });
+
+    // Lab Technician
+    const labUser = await prisma.user.create({
+        data: {
+            email: 'lab@ev-clinic.com',
+            password: adminPasswordHash,
+            name: 'Lisa LabTech',
+            role: 'LAB',
+            status: 'active'
+        }
+    });
+    await prisma.clinicstaff.create({
+        data: {
+            userId: labUser.id,
+            clinicId: clinic.id,
+            role: 'LAB',
+            department: 'Laboratory'
+        }
+    });
+
+    // Radiologist
+    const radiologyUser = await prisma.user.create({
+        data: {
+            email: 'radiology@ev-clinic.com',
+            password: adminPasswordHash,
+            name: 'Ray Radiologist',
+            role: 'RADIOLOGY',
+            status: 'active'
+        }
+    });
+    await prisma.clinicstaff.create({
+        data: {
+            userId: radiologyUser.id,
+            clinicId: clinic.id,
+            role: 'RADIOLOGY',
+            department: 'Radiology'
+        }
+    });
+
+    // Accountant
+    const accountantUser = await prisma.user.create({
+        data: {
+            email: 'accounts@ev-clinic.com',
+            password: adminPasswordHash,
+            name: 'Alex Accountant',
+            role: 'ACCOUNTANT',
+            status: 'active'
+        }
+    });
+    await prisma.clinicstaff.create({
+        data: {
+            userId: accountantUser.id,
+            clinicId: clinic.id,
+            role: 'ACCOUNTANT',
+            department: 'Accounts'
+        }
+    });
+
+    // 7. Create Dummy Patients - SKIPPED FOR ZERO DUMMY DATA REQUEST
+    console.log('🧑‍🤝‍🧑 Skipping Patient Creation (Clean State for Workflow Testing)...');
+
+    // 8. Create Inventory Items - SKIPPED
+    console.log('💊 Skipping Inventory Creation...');
+
+    // 9. Create Appointments - SKIPPED
+    console.log('📅 Skipping Appointment Creation...');
+
+    // 10. Create Service Orders - SKIPPED
+    console.log('🔬 Skipping Service Order Creation...');
+
+    console.log('✅ Seeding Complete! System Ready with Zero Transactional Data.');
+    console.log('👉 Super Admin: superadmin@ev.com / admin123');
+    console.log('👉 Clinic Admin: admin@ev-clinic.com / admin123');
+    console.log('👉 Doctor: doctor@ev-clinic.com / admin123');
+    console.log('👉 Reception: reception@ev-clinic.com / admin123');
 }
 
 main()

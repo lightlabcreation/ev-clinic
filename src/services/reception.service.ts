@@ -38,6 +38,34 @@ export const registerPatient = async (clinicId: number, data: any) => {
         }
     });
 
+    // Create User account for Patient Portal Access
+    let userCredentials = null;
+    if (email) {
+        // Check if user exists
+        const existingUser = await prisma.user.findUnique({ where: { email } });
+        if (!existingUser) {
+            const tempPassword = data.password || `Pass@${Math.floor(1000 + Math.random() * 9000)}`;
+            const bcrypt = await import('bcryptjs');
+            // sendCredentialsEmail imported later
+            const { sendCredentialsEmail } = await import('./mail.service.js');
+            const passwordHash = await bcrypt.hash(tempPassword, 12);
+
+            await prisma.user.create({
+                data: {
+                    email,
+                    password: passwordHash,
+                    name,
+                    role: 'PATIENT',
+                    status: 'active'
+                }
+            });
+            userCredentials = { email, password: tempPassword };
+
+            // Send email to patient
+            await sendCredentialsEmail(email, name, tempPassword);
+        }
+    }
+
     // If it's a walk-in, create an appointment and a pending invoice
     if (doctorId && fees) {
         const today = new Date();
@@ -67,7 +95,7 @@ export const registerPatient = async (clinicId: number, data: any) => {
         });
     }
 
-    return patient;
+    return { ...patient, credentials: userCredentials };
 };
 
 export const getBookings = async (clinicId: number, date?: string) => {
@@ -191,4 +219,51 @@ export const createBooking = async (clinicId: number, data: any) => {
     }
 
     return appointment;
+};
+
+export const resetPatientPassword = async (patientId: number, password: string) => {
+    // 1. Find patient
+    let patient = await prisma.patient.findUnique({
+        where: { id: patientId }
+    });
+
+    if (!patient) throw new AppError('Patient not found', 404);
+
+    // 2. Ensure Patient has an email
+    if (!patient.email) {
+        const generatedEmail = `patient${patient.id}@ev-clinic.com`;
+        patient = await prisma.patient.update({
+            where: { id: patientId },
+            data: { email: generatedEmail }
+        });
+    }
+
+    const bcrypt = await import('bcryptjs');
+    const hashedPassword = await bcrypt.hash(password, 12);
+
+    // 3. Find or Create User account
+    const user = await prisma.user.findUnique({
+        where: { email: patient.email! }
+    });
+
+    if (!user) {
+        // Create new user account
+        await prisma.user.create({
+            data: {
+                email: patient.email!,
+                password: hashedPassword,
+                name: patient.name,
+                role: 'PATIENT',
+                status: 'active'
+            }
+        });
+    } else {
+        // Update existing user password
+        await prisma.user.update({
+            where: { id: user.id },
+            data: { password: hashedPassword }
+        });
+    }
+
+    return { success: true };
 };

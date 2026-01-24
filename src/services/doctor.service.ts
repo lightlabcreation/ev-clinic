@@ -17,7 +17,7 @@ export const getDoctorQueue = async (clinicId: number, doctorId: number) => {
 };
 
 export const saveAssessment = async (clinicId: number, doctorId: number, payload: any) => {
-    const { patientId, templateId, type, findings, pharmacyOrder, labOrder, radiologyOrder } = payload;
+    const { patientId, templateId, type, findings, orders = [] } = payload;
 
     const assessment = await prisma.medicalrecord.create({
         data: {
@@ -26,43 +26,42 @@ export const saveAssessment = async (clinicId: number, doctorId: number, payload
             doctorId,
             templateId,
             type,
-            data: JSON.stringify({
-                ...findings,
-                pharmacyOrder,
-                labOrder,
-                radiologyOrder
-            }),
+            data: JSON.stringify(findings),
             isClosed: true
         }
     });
 
-    // Create notifications for departments
-    if (pharmacyOrder) {
-        await prisma.notification.create({
+    // Create Service Orders and Notifications
+    for (const order of orders) {
+        const { type: orderType, testName, details } = order;
+
+        const createdOrder = await prisma.service_order.create({
             data: {
                 clinicId,
-                department: 'pharmacy',
-                message: JSON.stringify({ patientId, details: pharmacyOrder })
+                patientId,
+                doctorId,
+                type: orderType,
+                testName,
+                status: 'Pending',
+                result: details // Store instructions here for now
             }
         });
-    }
 
-    if (labOrder) {
+        // Notify Department
+        let dept = 'laboratory';
+        if (orderType === 'RADIOLOGY') dept = 'radiology';
+        if (orderType === 'PHARMACY') dept = 'pharmacy';
+
         await prisma.notification.create({
             data: {
                 clinicId,
-                department: 'laboratory',
-                message: JSON.stringify({ patientId, details: labOrder })
-            }
-        });
-    }
-
-    if (radiologyOrder) {
-        await prisma.notification.create({
-            data: {
-                clinicId,
-                department: 'radiology',
-                message: JSON.stringify({ patientId, details: radiologyOrder })
+                department: dept,
+                message: JSON.stringify({
+                    patientId,
+                    orderId: createdOrder.id,
+                    type: orderType,
+                    details: `${testName} - ${details}`
+                })
             }
         });
     }
@@ -200,63 +199,62 @@ export const getAssignedPatients = async (clinicId: number, doctorId: number) =>
 };
 
 export const getDoctorOrders = async (clinicId: number, doctorId: number) => {
-    // Fetch notifications which serve as orders
-    // We need to parse the JSON message to filter by doctor if possible, or assume all clinic notifications?
-    // STRICT: The notification table doesn't have doctorId. 
-    // Plan B: Query MedicalRecords that have order data. This is more reliable for "My Orders".
-
-    const records = await prisma.medicalrecord.findMany({
+    const orders = await prisma.service_order.findMany({
         where: {
             clinicId,
-            doctorId,
-            // Filter where data contains orders - Prisma doesn't support deep JSON filtering easily in all DBs
-            // We'll fetch and filter in memory or rely on the type/fact it has data
+            doctorId
         },
-        include: { patient: { select: { name: true } } },
+        include: {
+            patient: { select: { name: true } }
+        },
         orderBy: { createdAt: 'desc' }
     });
 
-    const orders: any[] = [];
-    records.forEach(r => {
-        const data = JSON.parse(r.data as string || '{}');
-        const patientName = (r as any).patient?.name || 'Unknown';
+    return orders.map(o => ({
+        id: o.id,
+        // recordId: o.id, 
+        date: o.createdAt,
+        patientName: o.patient?.name || 'Unknown',
+        type: o.type,
+        details: o.testName,
+        status: o.status
+    }));
+};
 
-        if (data.pharmacyOrder) {
-            orders.push({
-                id: `RX-${r.id}`,
-                recordId: r.id,
-                date: r.createdAt,
-                patientName,
-                type: 'Pharmacy',
-                details: data.pharmacyOrder,
-                status: 'Ordered'
-            });
-        }
-        if (data.labOrder) {
-            orders.push({
-                id: `LAB-${r.id}`,
-                recordId: r.id,
-                date: r.createdAt,
-                patientName,
-                type: 'Laboratory',
-                details: data.labOrder,
-                status: 'Ordered'
-            });
-        }
-        if (data.radiologyOrder) {
-            orders.push({
-                id: `RAD-${r.id}`,
-                recordId: r.id,
-                date: r.createdAt,
-                patientName,
-                type: 'Radiology',
-                details: data.radiologyOrder,
-                status: 'Ordered'
-            });
+export const createOrder = async (clinicId: number, doctorId: number, data: any) => {
+    const { patientId, type, items, priority, notes, date } = data;
+
+    // Normalize type
+    let orderType = 'LAB';
+    if (type.toLowerCase().includes('rad')) orderType = 'RADIOLOGY';
+    if (type.toLowerCase().includes('presc') || type.toLowerCase().includes('pharm')) orderType = 'PHARMACY';
+
+    const order = await prisma.service_order.create({
+        data: {
+            clinicId,
+            patientId: Number(patientId),
+            doctorId,
+            type: orderType,
+            testName: items,
+            status: 'Pending',
+            result: JSON.stringify({ priority, notes, date })
         }
     });
 
-    return orders;
+    // Notify Department
+    let dept = 'laboratory';
+    if (orderType === 'RADIOLOGY') dept = 'radiology';
+    if (orderType === 'PHARMACY') dept = 'pharmacy';
+
+    await prisma.notification.create({
+        data: {
+            clinicId,
+            department: dept,
+            message: JSON.stringify({ patientId, orderId: order.id, type: orderType, items, priority, notes })
+        }
+    });
+
+    return order;
 };
 
 export const getRevenueStats = async (clinicId: number, doctorId: number) => {

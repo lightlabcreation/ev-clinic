@@ -19,6 +19,7 @@ router.get('/activities', clinicController.getActivities);
 router.post('/staff', clinicController.createStaff);
 router.patch('/staff/:id', clinicController.updateStaff);
 router.delete('/staff/:id', clinicController.deleteStaff);
+router.put('/users/:id/reset-password', clinicController.resetPassword);
 
 // Form Templates
 router.get('/templates', clinicController.getFormTemplates); // Admin manages templates

@@ -57,6 +57,13 @@ export const getPatients = asyncHandler(async (req: AuthRequest, res: Response) 
 });
 
 
+
+export const createOrder = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const doctorId = await resolveDoctorId(req.user!.id, req.user!.clinicId!);
+    const order = await doctorService.createOrder(req.user!.clinicId!, doctorId, req.body);
+    res.status(201).json({ status: 'success', data: order });
+});
+
 export const getOrders = asyncHandler(async (req: AuthRequest, res: Response) => {
     const doctorId = await resolveDoctorId(req.user!.id, req.user!.clinicId!);
     const orders = await doctorService.getDoctorOrders(req.user!.clinicId!, doctorId);
