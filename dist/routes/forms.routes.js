@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import * as formController from '../controllers/forms.controller';
-import { protect, restrictTo, ensureClinicContext } from '../middlewares/auth';
+import * as formController from '../controllers/forms.controller.js';
+import { protect, restrictTo, ensureClinicContext } from '../middlewares/auth.js';
 const router = Router();
 // Base protection
 router.use(protect, ensureClinicContext);

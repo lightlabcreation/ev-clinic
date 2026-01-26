@@ -1,5 +1,5 @@
-import { prisma } from '../server';
-import { AppError } from '../utils/AppError';
+import { prisma } from '../server.js';
+import { AppError } from '../utils/AppError.js';
 // ==================== TEMPLATES ====================
 export const getTemplates = async (clinicId) => {
     return await prisma.formtemplate.findMany({

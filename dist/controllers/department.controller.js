@@ -1,5 +1,5 @@
-import * as departmentService from '../services/department.service';
-import { asyncHandler } from '../utils/asyncHandler';
+import * as departmentService from '../services/department.service.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
 export const getDepartments = asyncHandler(async (req, res) => {
     const departments = await departmentService.getDepartments(Number(req.clinicId));
     res.status(200).json({ status: 'success', data: departments });

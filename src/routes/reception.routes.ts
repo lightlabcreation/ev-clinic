@@ -11,6 +11,7 @@ router.get('/activities', restrictTo('RECEPTIONIST', 'ADMIN'), receptionControll
 
 router.get('/patients', restrictTo('RECEPTIONIST', 'ADMIN', 'DOCTOR'), receptionController.getPatients);
 router.post('/patients', restrictTo('RECEPTIONIST', 'ADMIN'), receptionController.createPatient);
+router.patch('/patients/:id', restrictTo('RECEPTIONIST', 'ADMIN', 'DOCTOR'), receptionController.updatePatient);
 
 router.get('/appointments', restrictTo('RECEPTIONIST', 'ADMIN', 'DOCTOR'), receptionController.getAppointments);
 router.post('/appointments', restrictTo('RECEPTIONIST', 'ADMIN'), receptionController.createAppointment);

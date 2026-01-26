@@ -7,15 +7,17 @@
     "outDir": "./dist",
     "esModuleInterop": true,
     "strict": false,
-    "skipLibCheck": true
+    "types": [
+      "node"
+    ]
   },
   "include": [
-    "src/**/*"
+    "src/**/*",
+    "prisma/**/*.ts"
   ],
   "exclude": [
     "node_modules",
     "dist",
-    "prisma",
     "check-super.ts",
     "test-bcrypt.ts"
   ]

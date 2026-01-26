@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import * as clinicController from '../controllers/clinic.controller';
-import { protect, restrictTo, ensureClinicContext } from '../middlewares/auth';
+import * as clinicController from '../controllers/clinic.controller.js';
+import { protect, restrictTo, ensureClinicContext } from '../middlewares/auth.js';
 const router = Router();
 // Base protection for all routes
 router.use(protect, ensureClinicContext);
@@ -14,6 +14,7 @@ router.get('/activities', clinicController.getActivities);
 router.post('/staff', clinicController.createStaff);
 router.patch('/staff/:id', clinicController.updateStaff);
 router.delete('/staff/:id', clinicController.deleteStaff);
+router.put('/users/:id/reset-password', clinicController.resetPassword);
 // Form Templates
 router.get('/templates', clinicController.getFormTemplates); // Admin manages templates
 router.post('/templates', clinicController.createFormTemplate);

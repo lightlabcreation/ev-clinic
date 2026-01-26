@@ -1,5 +1,5 @@
-import * as receptionService from '../services/reception.service';
-import { asyncHandler } from '../utils/asyncHandler';
+import * as receptionService from '../services/reception.service.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
 export const getPatients = asyncHandler(async (req, res) => {
     const patients = await receptionService.getPatientsByClinic(req.user.clinicId, req.query.search);
     res.status(200).json({ status: 'success', data: patients });
@@ -7,6 +7,10 @@ export const getPatients = asyncHandler(async (req, res) => {
 export const createPatient = asyncHandler(async (req, res) => {
     const patient = await receptionService.registerPatient(req.user.clinicId, req.body);
     res.status(201).json({ status: 'success', data: patient });
+});
+export const updatePatient = asyncHandler(async (req, res) => {
+    const patient = await receptionService.updatePatientDetails(req.user.clinicId, Number(req.params.id), req.body);
+    res.status(200).json({ status: 'success', data: patient });
 });
 export const getAppointments = asyncHandler(async (req, res) => {
     const appointments = await receptionService.getBookings(req.user.clinicId, req.query.date);
@@ -27,4 +31,8 @@ export const getStats = asyncHandler(async (req, res) => {
 export const getActivities = asyncHandler(async (req, res) => {
     const activities = await receptionService.getReceptionActivities(req.user.clinicId);
     res.status(200).json({ status: 'success', data: activities });
+});
+export const resetPassword = asyncHandler(async (req, res) => {
+    await receptionService.resetPatientPassword(Number(req.params.id), req.body.password);
+    res.status(200).json({ status: 'success', message: 'Password reset successfully' });
 });

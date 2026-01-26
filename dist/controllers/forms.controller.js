@@ -1,6 +1,6 @@
-import * as formService from '../services/form.service';
-import { asyncHandler } from '../utils/asyncHandler';
-import { prisma } from '../server';
+import * as formService from '../services/form.service.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
+import { prisma } from '../server.js';
 const resolveDoctorId = async (userId, clinicId) => {
     const staff = await prisma.clinicstaff.findFirst({
         where: { userId, clinicId }

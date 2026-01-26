@@ -8,9 +8,9 @@ export const getInvoices = async (clinicId: number) => {
     });
 };
 
-export const updateInvoiceStatus = async (id: string, status: string) => {
+export const updateInvoiceStatus = async (clinicId: number, id: string, status: string) => {
     return await prisma.invoice.update({
-        where: { id },
+        where: { id, clinicId },
         data: { status }
     });
 };

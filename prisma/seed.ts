@@ -6,7 +6,7 @@ const prisma = new PrismaClient();
 async function main() {
     console.log('🌱 Starting Clean Seed...');
 
-    // 1. Clean Database (Delete in order of dependencies)
+    // 1. Clean Database
     console.log('🧹 Cleaning existing data...');
     await prisma.service_order.deleteMany();
     await prisma.inventory.deleteMany();
@@ -25,15 +25,11 @@ async function main() {
 
     console.log('✅ Database cleaned.');
 
-    // 2. Create Global Password
-    const passwordHash = await bcrypt.hash('password123', 12);
-    // Specific password for super admin to match user request if needed, but 'password123' is standard for dev. 
-    // User asked for "admin123" in previous context, check login: 'superadmin@ev.com' / 'admin123'
     const adminPasswordHash = await bcrypt.hash('admin123', 12);
 
-    // 3. Create Super Admin User
+    // 2. Create Super Admin User
     console.log('👤 Creating Super Admin...');
-    const superAdminUser = await prisma.user.create({
+    await prisma.user.create({
         data: {
             email: 'superadmin@ev.com',
             password: adminPasswordHash,
@@ -43,207 +39,259 @@ async function main() {
         }
     });
 
-    // 4. Create The ONE Clinic
-    console.log('🏥 Creating Exclusive Vision Clinic...');
-    // Subscription details: Monthly plan, active, starts now, ends in 1 month
-    const startDate = new Date();
-    const endDate = new Date();
-    endDate.setMonth(endDate.getMonth() + 1);
-
-    const clinic = await prisma.clinic.create({
+    // 3. Create Multi-Clinic Admin User
+    console.log('👤 Creating Clinic Admin (Multi-Clinic User)...');
+    const clinicAdminUser = await prisma.user.create({
         data: {
-            name: 'Exclusive Vision Clinic',
-            subdomain: 'ev-clinic',
-            location: 'Main Health Hub, New York',
-            contact: '+1 (555) 000-0001',
             email: 'admin@ev-clinic.com',
-            status: 'active',
-            modules: JSON.stringify({
-                pharmacy: true,
-                radiology: true,
-                laboratory: true,
-                billing: true
-            }),
-            subscriptionPlan: 'Monthly',
-            subscriptionStart: startDate,
-            subscriptionEnd: endDate,
-            isActive: true,
-            bookingConfig: JSON.stringify({
-                slotDuration: 30,
-                startHour: 9,
-                endHour: 17,
-                days: [1, 2, 3, 4, 5] // Mon-Fri
-            })
+            password: adminPasswordHash,
+            name: 'Clinic Administrator',
+            role: 'ADMIN',
+            status: 'active'
         }
     });
 
-    // 5. Create Departments
-    console.log('🏢 Creating Departments...');
-    const depts = ['General Practice', 'Pharmacy', 'Laboratory', 'Radiology', 'Accounts', 'Reception'];
-    for (const d of depts) {
-        await prisma.department.create({
+    // 4. Create The Clinics (Husri, Skaf, Ghannam)
+    const clinicNames = [
+        { name: 'Husri Clinic', subdomain: 'husri' },
+        { name: 'Skaf Clinic', subdomain: 'skaf' },
+        { name: 'Ghannam Clinic', subdomain: 'ghannam' }
+    ];
+
+    console.log('🏥 Creating 3 Clinics for Multi-Tenant Testing...');
+
+    for (const data of clinicNames) {
+        const clinic = await prisma.clinic.create({
+            data: {
+                name: data.name,
+                subdomain: data.subdomain,
+                location: 'Medical District, Dubai',
+                contact: '+971 4 000 0000',
+                email: `info@${data.subdomain}.online`,
+                status: 'active',
+                modules: JSON.stringify({
+                    pharmacy: true,
+                    radiology: true,
+                    laboratory: true,
+                    billing: true,
+                    reports: true
+                }),
+                subscriptionPlan: 'Yearly',
+                subscriptionStart: new Date(),
+                subscriptionEnd: new Date(new Date().setFullYear(new Date().getFullYear() + 1)),
+                isActive: true
+            }
+        });
+
+        // Assign Admin to this clinic
+        await prisma.clinicstaff.create({
+            data: {
+                userId: clinicAdminUser.id,
+                clinicId: clinic.id,
+                role: 'ADMIN',
+                department: 'Administration'
+            }
+        });
+
+        // Add dummy Doctor for each clinic
+        const docUser = await prisma.user.create({
+            data: {
+                email: `doctor@${data.subdomain}.com`,
+                password: adminPasswordHash,
+                name: `Dr. John (${data.name})`,
+                role: 'DOCTOR',
+                status: 'active'
+            }
+        });
+
+        // Create Default Departments
+        console.log(`🏢 Creating Departments for ${clinic.name}...`);
+        const depts = [
+            { name: 'Administration', type: 'CLINICAL' },
+            { name: 'Clinical', type: 'CLINICAL' },
+            { name: 'Laboratory', type: 'SERVICE' },
+            { name: 'Pharmacy', type: 'SERVICE' },
+            { name: 'Radiology', type: 'SERVICE' }
+        ];
+
+        for (const dept of depts) {
+            await prisma.department.create({
+                data: {
+                    clinicId: clinic.id,
+                    name: dept.name,
+                    type: dept.type
+                }
+            });
+        }
+
+        await prisma.clinicstaff.create({
+            data: {
+                userId: docUser.id,
+                clinicId: clinic.id,
+                role: 'DOCTOR',
+                department: 'Clinical',
+                specialty: 'General Medicine'
+            }
+        });
+
+        // Create Default Form Templates
+        console.log(`📝 Creating Default Assessment Templates for ${clinic.name}...`);
+        await prisma.formtemplate.create({
             data: {
                 clinicId: clinic.id,
-                name: d,
-                type: d === 'General Practice' ? 'CLINICAL' : 'ADMINISTRATIVE'
+                name: 'General Clinical Assessment',
+                specialty: 'General Medicine',
+                status: 'published',
+                version: 1,
+                fields: JSON.stringify([
+                    {
+                        id: 'chiefComplaint',
+                        type: 'textarea',
+                        label: 'Chief Complaint',
+                        required: true,
+                        placeholder: 'Patient\'s primary reason for visit'
+                    },
+                    {
+                        id: 'symptoms',
+                        type: 'textarea',
+                        label: 'Symptoms',
+                        required: true,
+                        placeholder: 'List of symptoms reported'
+                    },
+                    {
+                        id: 'vitals',
+                        type: 'text',
+                        label: 'Vitals (BP, HR, Temp)',
+                        required: false,
+                        placeholder: 'e.g. 120/80, 72bpm, 36.5C'
+                    },
+                    {
+                        id: 'examination',
+                        type: 'textarea',
+                        label: 'Physical Examination Findings',
+                        required: true,
+                        placeholder: 'Observations from physical exam'
+                    }
+                ])
             }
         });
     }
 
-    // 6. Create Clinic Staff Users
-    console.log('👥 Creating Clinic Staff...');
+    // 5. Create Demo Users for Magic Login (matching UI)
+    console.log('👤 Creating Demo Users for Magic Login UI...');
+    const firstClinic = await prisma.clinic.findFirst({ where: { subdomain: 'husri' } });
 
-    // Clinic Admin
-    const clinicAdminUser = await prisma.user.create({
-        data: {
-            email: 'admin@ev-clinic.com',
-            password: adminPasswordHash, // Use same standard password
-            name: 'Clinic Admin',
-            role: 'ADMIN',
-            status: 'active'
-        }
-    });
-    await prisma.clinicstaff.create({
-        data: {
-            userId: clinicAdminUser.id,
-            clinicId: clinic.id,
-            role: 'ADMIN',
-            department: 'Administration'
-        }
-    });
+    if (firstClinic) {
+        // Specialist Doctor
+        const demoDoc = await prisma.user.create({
+            data: {
+                email: 'doctor@ev-clinic.com',
+                password: adminPasswordHash,
+                name: 'Dr. Specialist (Demo)',
+                role: 'DOCTOR',
+                status: 'active'
+            }
+        });
 
-    // Doctor
-    const doctorUser = await prisma.user.create({
-        data: {
-            email: 'doctor@ev-clinic.com',
-            password: adminPasswordHash,
-            name: 'Dr. John Smith',
-            role: 'DOCTOR',
-            status: 'active'
-        }
-    });
-    await prisma.clinicstaff.create({
-        data: {
-            userId: doctorUser.id,
-            clinicId: clinic.id,
-            role: 'DOCTOR',
-            department: 'General Practice',
-            specialty: 'Cardiology'
-        }
-    });
+        await prisma.clinicstaff.create({
+            data: {
+                userId: demoDoc.id,
+                clinicId: firstClinic.id,
+                role: 'DOCTOR',
+                department: 'Clinical',
+                specialty: 'Specialist'
+            }
+        });
 
-    // Receptionist
-    const receptionUser = await prisma.user.create({
-        data: {
-            email: 'reception@ev-clinic.com',
-            password: adminPasswordHash,
-            name: 'Sarah Receptionist',
-            role: 'RECEPTIONIST',
-            status: 'active'
-        }
-    });
-    await prisma.clinicstaff.create({
-        data: {
-            userId: receptionUser.id,
-            clinicId: clinic.id,
-            role: 'RECEPTIONIST',
-            department: 'Reception'
-        }
-    });
+        // Receptionist
+        const demoRecep = await prisma.user.create({
+            data: {
+                email: 'reception@ev-clinic.com',
+                password: adminPasswordHash,
+                name: 'Receptionist (Demo)',
+                role: 'RECEPTIONIST',
+                status: 'active'
+            }
+        });
 
-    // Pharmacist
-    const pharmacyUser = await prisma.user.create({
-        data: {
-            email: 'pharmacy@ev-clinic.com',
-            password: adminPasswordHash,
-            name: 'Paul Pharmacist',
-            role: 'PHARMACY',
-            status: 'active'
-        }
-    });
-    await prisma.clinicstaff.create({
-        data: {
-            userId: pharmacyUser.id,
-            clinicId: clinic.id,
-            role: 'PHARMACY',
-            department: 'Pharmacy'
-        }
-    });
+        await prisma.clinicstaff.create({
+            data: {
+                userId: demoRecep.id,
+                clinicId: firstClinic.id,
+                role: 'RECEPTIONIST',
+                department: 'Front Desk'
+            }
+        });
 
-    // Lab Technician
-    const labUser = await prisma.user.create({
-        data: {
-            email: 'lab@ev-clinic.com',
-            password: adminPasswordHash,
-            name: 'Lisa LabTech',
-            role: 'LAB',
-            status: 'active'
-        }
-    });
-    await prisma.clinicstaff.create({
-        data: {
-            userId: labUser.id,
-            clinicId: clinic.id,
-            role: 'LAB',
-            department: 'Laboratory'
-        }
-    });
+        // 6. Create Case Study Data: Aisha Khan
+        console.log('📝 Creating Case Study Data: Aisha Khan...');
 
-    // Radiologist
-    const radiologyUser = await prisma.user.create({
-        data: {
-            email: 'radiology@ev-clinic.com',
-            password: adminPasswordHash,
-            name: 'Ray Radiologist',
-            role: 'RADIOLOGY',
-            status: 'active'
-        }
-    });
-    await prisma.clinicstaff.create({
-        data: {
-            userId: radiologyUser.id,
-            clinicId: clinic.id,
-            role: 'RADIOLOGY',
-            department: 'Radiology'
-        }
-    });
+        // Add Panadol to Inventory
+        await prisma.inventory.create({
+            data: {
+                clinicId: firstClinic.id,
+                name: 'Panadol (500mg)',
+                sku: 'RX-PAN-001',
+                quantity: 100,
+                unitPrice: 15.00,
+                expiryDate: new Date('2026-12-31')
+            }
+        });
 
-    // Accountant
-    const accountantUser = await prisma.user.create({
-        data: {
-            email: 'accounts@ev-clinic.com',
-            password: adminPasswordHash,
-            name: 'Alex Accountant',
-            role: 'ACCOUNTANT',
-            status: 'active'
-        }
-    });
-    await prisma.clinicstaff.create({
-        data: {
-            userId: accountantUser.id,
-            clinicId: clinic.id,
-            role: 'ACCOUNTANT',
-            department: 'Accounts'
-        }
-    });
+        // Add Aisha as User (for login)
+        const aishaUser = await prisma.user.create({
+            data: {
+                email: 'aisha@example.com',
+                password: adminPasswordHash,
+                name: 'Aisha Khan',
+                role: 'PATIENT',
+                status: 'active'
+            }
+        });
 
-    // 7. Create Dummy Patients - SKIPPED FOR ZERO DUMMY DATA REQUEST
-    console.log('🧑‍🤝‍🧑 Skipping Patient Creation (Clean State for Workflow Testing)...');
+        // Add Aisha as Patient record
+        const aisha = await prisma.patient.create({
+            data: {
+                clinicId: firstClinic.id,
+                name: 'Aisha Khan',
+                email: 'aisha@example.com',
+                phone: '+971 55 999 8888',
+                gender: 'Female',
+                age: 28,
+                status: 'Active',
+                mrn: 'MRN-AI-001'
+            }
+        });
 
-    // 8. Create Inventory Items - SKIPPED
-    console.log('💊 Skipping Inventory Creation...');
+        // Add Active Appointment (Checked In)
+        await prisma.appointment.create({
+            data: {
+                clinicId: firstClinic.id,
+                patientId: aisha.id,
+                doctorId: demoDoc.id,
+                date: new Date(),
+                time: '10:30',
+                status: 'Checked In',
+                source: 'Walk-in',
+                notes: 'Aisha is waiting in the clinic for her fever checkup.'
+            }
+        });
 
-    // 9. Create Appointments - SKIPPED
-    console.log('📅 Skipping Appointment Creation...');
+        // Add a Pending Lab Order for her (to simulate doctor work)
+        await prisma.service_order.create({
+            data: {
+                clinicId: firstClinic.id,
+                patientId: aisha.id,
+                doctorId: demoDoc.id,
+                type: 'LAB',
+                testName: 'CBC Blood Test',
+                status: 'Pending'
+            }
+        });
+    }
 
-    // 10. Create Service Orders - SKIPPED
-    console.log('🔬 Skipping Service Order Creation...');
-
-    console.log('✅ Seeding Complete! System Ready with Zero Transactional Data.');
-    console.log('👉 Super Admin: superadmin@ev.com / admin123');
-    console.log('👉 Clinic Admin: admin@ev-clinic.com / admin123');
-    console.log('👉 Doctor: doctor@ev-clinic.com / admin123');
-    console.log('👉 Reception: reception@ev-clinic.com / admin123');
+    console.log('✅ Seeding Complete! Aisha Khan is now waiting in Husri Clinic.');
+    console.log('👉 Login: admin@ev-clinic.com / admin123');
 }
 
 main()

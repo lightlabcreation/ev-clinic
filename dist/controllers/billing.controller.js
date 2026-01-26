@@ -1,5 +1,5 @@
-import * as billingService from '../services/billing.service';
-import { asyncHandler } from '../utils/asyncHandler';
+import * as billingService from '../services/billing.service.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
 export const getInvoices = asyncHandler(async (req, res) => {
     const invoices = await billingService.getInvoices(req.clinicId);
     res.status(200).json({ status: 'success', data: invoices });
@@ -9,6 +9,6 @@ export const createInvoice = asyncHandler(async (req, res) => {
     res.status(201).json({ status: 'success', data: invoice });
 });
 export const updateInvoice = asyncHandler(async (req, res) => {
-    const invoice = await billingService.updateInvoiceStatus(req.params.id, req.body.status);
+    const invoice = await billingService.updateInvoiceStatus(req.clinicId, req.params.id, req.body.status);
     res.status(200).json({ status: 'success', data: invoice });
 });

@@ -14,6 +14,9 @@ import clinicRoutes from './routes/clinic.routes.js';
 import departmentRoutes from './routes/department.routes.js';
 import patientRoutes from './routes/patient.routes.js';
 import formsRoutes from './routes/forms.routes.js';
+import pharmacyRoutes from './routes/pharmacy.routes.js';
+import labRoutes from './routes/lab.routes.js';
+
 
 import { startTime } from './utils/system.js';
 
@@ -57,6 +60,9 @@ app.use('/api/clinic', clinicRoutes);
 app.use('/api/departments', departmentRoutes);
 app.use('/api/patient', patientRoutes);
 app.use('/api/forms', formsRoutes);
+app.use('/api/pharmacy', pharmacyRoutes);
+app.use('/api/lab', labRoutes);
+
 
 /* -------------------- HEALTH CHECK -------------------- */
 

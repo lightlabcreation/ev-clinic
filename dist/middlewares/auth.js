@@ -1,6 +1,6 @@
 import jwt from 'jsonwebtoken';
-import { AppError } from '../utils/AppError';
-import { prisma } from '../server';
+import { AppError } from '../utils/AppError.js';
+import { prisma } from '../server.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -47,11 +47,69 @@ export const restrictTo = (...roles) => {
         next();
     };
 };
-export const ensureClinicContext = (req, res, next) => {
-    const clinicId = req.user?.clinicId || (req.headers['x-clinic-id'] ? Number(req.headers['x-clinic-id']) : undefined);
-    if (!clinicId && req.user?.role !== 'SUPER_ADMIN') {
-        return next(new AppError('No clinic context found. Please select a clinic.', 400));
+export const ensureClinicContext = async (req, res, next) => {
+    try {
+        // 1. If user is Super Admin, they can access any clinic
+        if (req.user?.role === 'SUPER_ADMIN') {
+            const headerId = req.headers['x-clinic-id'] ? Number(req.headers['x-clinic-id']) : undefined;
+            req.clinicId = req.user.clinicId || headerId;
+            return next();
+        }
+        // 2. Priority: Token-locked Clinic ID (Session locking)
+        let clinicId = req.user?.clinicId;
+        // 3. Fallback: Header-based ID (for multi-clinic selection phase)
+        const headerId = req.headers['x-clinic-id'] ? Number(req.headers['x-clinic-id']) : undefined;
+        if (!clinicId && headerId) {
+            // VERIFY: Does this user actually have access to this clinic?
+            const membership = await prisma.clinicstaff.findFirst({
+                where: {
+                    userId: req.user.id,
+                    clinicId: headerId
+                }
+            });
+            if (!membership) {
+                console.warn(`[SECURITY] Unauthorized clinic access attempt by ${req.user?.email} for clinic ${headerId}`);
+                return next(new AppError('Unauthorized: You do not belong to this clinic.', 403));
+            }
+            clinicId = headerId;
+        }
+        if (!clinicId) {
+            return next(new AppError('No clinic context found. Please select a clinic.', 400));
+        }
+        req.clinicId = clinicId;
+        next();
     }
-    req.clinicId = clinicId;
-    next();
+    catch (error) {
+        next(error);
+    }
+};
+export const requireModule = (moduleName) => {
+    return async (req, res, next) => {
+        try {
+            // Super admins bypass module checks
+            if (req.user?.role === 'SUPER_ADMIN')
+                return next();
+            const clinicId = req.clinicId;
+            if (!clinicId)
+                return next(new AppError('No clinic context found.', 400));
+            const clinic = await prisma.clinic.findUnique({
+                where: { id: clinicId },
+                select: { modules: true }
+            });
+            if (!clinic)
+                return next(new AppError('Clinic not found.', 404));
+            const modules = clinic.modules ? JSON.parse(clinic.modules) : {};
+            // Normalize module name (e.g. 'Lab' -> 'laboratory')
+            let key = moduleName.toLowerCase();
+            if (key === 'lab')
+                key = 'laboratory';
+            if (!modules[key]) {
+                return next(new AppError(`The ${moduleName} module is not enabled for this clinic.`, 403));
+            }
+            next();
+        }
+        catch (error) {
+            next(error);
+        }
+    };
 };

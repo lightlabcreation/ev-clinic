@@ -1,4 +1,4 @@
-import * as patientService from '../services/patient.service';
+import * as patientService from '../services/patient.service.js';
 export const getMyAppointments = async (req, res, next) => {
     try {
         const authReq = req;

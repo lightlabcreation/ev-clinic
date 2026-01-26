@@ -1,5 +1,5 @@
 import { ZodError } from 'zod';
-import { AppError } from '../utils/AppError';
+import { AppError } from '../utils/AppError.js';
 export const validate = (schema) => {
     return async (req, res, next) => {
         try {

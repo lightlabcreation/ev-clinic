@@ -1,5 +1,5 @@
-import * as superService from '../services/super.service';
-import { asyncHandler } from '../utils/asyncHandler';
+import * as superService from '../services/super.service.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
 // ==================== CLINICS ====================
 export const createClinic = asyncHandler(async (req, res) => {
     const clinic = await superService.createClinic(req.body);
@@ -75,6 +75,10 @@ export const updateSecuritySettings = asyncHandler(async (req, res) => {
     const result = await superService.updateSecuritySettings(req.body);
     res.status(200).json({ success: true, message: 'Security settings updated', data: result });
 });
+export const updateSMTPSettings = asyncHandler(async (req, res) => {
+    const result = await superService.updateSystemSettings('smtp', req.body);
+    res.status(200).json({ success: true, message: 'SMTP settings updated', data: result });
+});
 export const getStorageStats = asyncHandler(async (req, res) => {
     const stats = await superService.getStorageStats();
     res.status(200).json({ success: true, data: stats });
@@ -86,7 +90,7 @@ export const triggerBackup = asyncHandler(async (req, res) => {
 export const impersonateClinic = asyncHandler(async (req, res) => {
     const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
     const clientDevice = req.headers['user-agent'] || 'unknown';
-    const result = await import('../services/auth.service').then(m => m.impersonateClinic(req.user.id, req.body.clinicId, String(clientIp), String(clientDevice)));
+    const result = await import('../services/auth.service.js').then(m => m.impersonateClinic(req.user.id, req.body.clinicId, String(clientIp), String(clientDevice)));
     res.status(200).json({
         success: true,
         message: 'Clinic impersonation successful',
@@ -96,10 +100,49 @@ export const impersonateClinic = asyncHandler(async (req, res) => {
 export const impersonateUser = asyncHandler(async (req, res) => {
     const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
     const clientDevice = req.headers['user-agent'] || 'unknown';
-    const result = await import('../services/auth.service').then(m => m.impersonate(req.user.id, req.body.userId, String(clientIp), String(clientDevice)));
+    const result = await import('../services/auth.service.js').then(m => m.impersonate(req.user.id, req.body.userId, String(clientIp), String(clientDevice)));
     res.status(200).json({
         success: true,
         message: 'User impersonation successful',
         data: result
     });
+});
+export const generateInvoice = asyncHandler(async (req, res) => {
+    const { clinicId, amount, description } = req.body;
+    const invoice = await superService.generateClinicInvoice(Number(clinicId), Number(amount), description);
+    res.status(201).json({ success: true, message: 'Invoice generated', data: invoice });
+});
+export const getReports = asyncHandler(async (req, res) => {
+    const { startDate, endDate } = req.query;
+    const report = await superService.getSuperAdminReports(startDate, endDate);
+    res.status(200).json({ success: true, data: report });
+});
+export const getInvoices = asyncHandler(async (req, res) => {
+    const { clinicId, status, startDate, endDate } = req.query;
+    const invoices = await superService.getInvoices({
+        clinicId: clinicId ? Number(clinicId) : undefined,
+        status: status,
+        startDate: startDate,
+        endDate: endDate
+    });
+    res.status(200).json({ success: true, data: invoices });
+});
+export const getClinicInsights = asyncHandler(async (req, res) => {
+    try {
+        const insights = await superService.getClinicInsights(Number(req.params.id));
+        res.status(200).json({ success: true, data: insights });
+    }
+    catch (error) {
+        console.error('Error in getClinicInsights:', error);
+        throw error;
+    }
+});
+export const resetUserPassword = asyncHandler(async (req, res) => {
+    const { userId, password } = req.body;
+    await superService.resetClinicAdminPassword(Number(userId), password);
+    res.status(200).json({ success: true, message: 'Password reset successfully' });
+});
+export const updateSubscription = asyncHandler(async (req, res) => {
+    const clinic = await superService.updateClinicSubscription(Number(req.params.id), req.body);
+    res.status(200).json({ success: true, message: 'Subscription updated successfully', data: clinic });
 });

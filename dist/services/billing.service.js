@@ -1,4 +1,4 @@
-import { prisma } from '../server';
+import { prisma } from '../server.js';
 export const getInvoices = async (clinicId) => {
     return await prisma.invoice.findMany({
         where: { clinicId },
@@ -6,9 +6,9 @@ export const getInvoices = async (clinicId) => {
         orderBy: { createdAt: 'desc' }
     });
 };
-export const updateInvoiceStatus = async (id, status) => {
+export const updateInvoiceStatus = async (clinicId, id, status) => {
     return await prisma.invoice.update({
-        where: { id },
+        where: { id, clinicId },
         data: { status }
     });
 };

@@ -14,6 +14,6 @@ export const createInvoice = asyncHandler(async (req: AuthRequest, res: Response
 });
 
 export const updateInvoice = asyncHandler(async (req: AuthRequest, res: Response) => {
-    const invoice = await billingService.updateInvoiceStatus(req.params.id as string, req.body.status);
+    const invoice = await billingService.updateInvoiceStatus(req.clinicId!, req.params.id as string, req.body.status);
     res.status(200).json({ status: 'success', data: invoice });
 });

@@ -13,6 +13,11 @@ export const createPatient = asyncHandler(async (req: AuthRequest, res: Response
     res.status(201).json({ status: 'success', data: patient });
 });
 
+export const updatePatient = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const patient = await receptionService.updatePatientDetails(req.user!.clinicId!, Number(req.params.id), req.body);
+    res.status(200).json({ status: 'success', data: patient });
+});
+
 export const getAppointments = asyncHandler(async (req: AuthRequest, res: Response) => {
     const appointments = await receptionService.getBookings(req.user!.clinicId!, req.query.date as string);
     res.status(200).json({ status: 'success', data: appointments });

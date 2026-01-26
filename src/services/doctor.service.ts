@@ -19,6 +19,9 @@ export const getDoctorQueue = async (clinicId: number, doctorId: number) => {
 export const saveAssessment = async (clinicId: number, doctorId: number, payload: any) => {
     const { patientId, templateId, type, findings, orders = [] } = payload;
 
+    // Save exact copy of orders in the medical record data for viewing later
+    const recordData = { ...findings, ordersSnapshot: orders || [] };
+
     const assessment = await prisma.medicalrecord.create({
         data: {
             clinicId,
@@ -26,7 +29,7 @@ export const saveAssessment = async (clinicId: number, doctorId: number, payload
             doctorId,
             templateId,
             type,
-            data: JSON.stringify(findings),
+            data: JSON.stringify(recordData),
             isClosed: true
         }
     });
@@ -158,43 +161,23 @@ export const getFormTemplates = async (clinicId: number) => {
 };
 
 export const getAssignedPatients = async (clinicId: number, doctorId: number) => {
-    // Patients who have had an appt with this doctor OR are in the same clinic (for now restricted to clinic, but ideally doctor specific)
-    // The requirement says "only assigned patients". Strict interpretation: Patients who have an appointment or medical record with THIS doctor.
-
-    // 1. Find patients with appointments
-    const apptPatients = await prisma.appointment.findMany({
-        where: { clinicId, doctorId },
-        select: { patientId: true },
-        distinct: ['patientId']
-    });
-
-    // 2. Find patients with medical records
-    const recordPatients = await prisma.medicalrecord.findMany({
-        where: { clinicId, doctorId },
-        select: { patientId: true },
-        distinct: ['patientId']
-    });
-
-    const patientIds = Array.from(new Set([
-        ...apptPatients.map(p => p.patientId),
-        ...recordPatients.map(p => p.patientId)
-    ]));
-
-    if (patientIds.length === 0) return [];
+    // Return ALL patients in the clinic to ensure doctors can find anyone registered
+    // detailed filtering can be added later if strict assignment is needed.
 
     return await prisma.patient.findMany({
         where: {
-            id: { in: patientIds }
+            clinicId
         },
         include: {
             // Include recent medical record for context
             medicalrecord: {
-                where: { clinicId, doctorId },
+                where: { clinicId },
                 take: 1,
                 orderBy: { createdAt: 'desc' },
                 select: { createdAt: true, type: true }
             }
-        }
+        },
+        orderBy: { createdAt: 'desc' }
     });
 };
 

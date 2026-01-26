@@ -1,5 +1,5 @@
-import { prisma } from '../server';
-import { AppError } from '../utils/AppError';
+import { prisma } from '../server.js';
+import { AppError } from '../utils/AppError.js';
 import bcrypt from 'bcryptjs';
 export const getClinicStats = async (clinicId) => {
     const today = new Date();
@@ -317,4 +317,26 @@ export const updateBookingConfig = async (clinicId, config) => {
         }
     });
     return updated.bookingConfig ? JSON.parse(updated.bookingConfig) : null;
+};
+export const resetUserPassword = async (clinicId, userId, password) => {
+    const staff = await prisma.clinicstaff.findFirst({
+        where: { userId, clinicId }
+    });
+    if (!staff)
+        throw new AppError('User does not belong to this clinic', 403);
+    const hashedPassword = await bcrypt.hash(password, 12);
+    await prisma.user.update({
+        where: { id: userId },
+        data: { password: hashedPassword }
+    });
+    await prisma.auditlog.create({
+        data: {
+            action: 'Password Reset',
+            performedBy: 'ADMIN',
+            userId: userId,
+            clinicId,
+            details: JSON.stringify({ note: 'Admin reset password' })
+        }
+    });
+    return { success: true };
 };

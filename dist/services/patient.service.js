@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import { AppError } from '../utils/AppError';
+import { AppError } from '../utils/AppError.js';
 const prisma = new PrismaClient();
 export const getMyAppointments = async (userId, email) => {
     // Patients are linked to users via email or ID. 
@@ -41,23 +41,42 @@ export const getMyMedicalRecords = async (userId, email) => {
     const patientIds = patientRecords.map(p => p.id);
     if (patientIds.length === 0)
         return [];
-    const records = await prisma.medicalrecord.findMany({
-        where: {
-            patientId: { in: patientIds }
-        },
-        include: {
-            clinic: { select: { name: true } },
-            formtemplate: { select: { name: true } }
-        },
-        orderBy: {
-            visitDate: 'desc'
-        }
-    });
-    // Parse the JSON data field
-    return records.map(record => ({
-        ...record,
-        data: record.data ? JSON.parse(record.data) : {}
-    }));
+    const [records, serviceOrders] = await Promise.all([
+        prisma.medicalrecord.findMany({
+            where: {
+                patientId: { in: patientIds }
+            },
+            include: {
+                clinic: { select: { name: true } },
+                formtemplate: { select: { name: true } }
+            },
+            orderBy: {
+                visitDate: 'desc'
+            }
+        }),
+        prisma.service_order.findMany({
+            where: {
+                patientId: { in: patientIds }
+            },
+            include: {
+                clinic: { select: { name: true } }
+            },
+            orderBy: {
+                createdAt: 'desc'
+            }
+        })
+    ]);
+    // Parse the JSON data field and return aggregated records
+    return {
+        assessments: records.map(record => ({
+            ...record,
+            data: record.data ? JSON.parse(record.data) : {}
+        })),
+        serviceOrders: serviceOrders.map(order => ({
+            ...order,
+            result: order.result && order.result.startsWith('{') ? JSON.parse(order.result) : order.result
+        }))
+    };
 };
 export const getMyInvoices = async (userId, email) => {
     const patientRecords = await prisma.patient.findMany({

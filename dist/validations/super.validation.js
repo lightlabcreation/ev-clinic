@@ -1,7 +1,7 @@
 import { z } from 'zod';
 export const createClinicSchema = z.object({
     name: z.string().min(2, 'Name is too short'),
-    location: z.string().min(5, 'Address is too short'),
+    location: z.string().min(4, 'Address is too short'),
     email: z.string().email(),
     contact: z.string().min(8, 'Phone is too short'),
     subdomain: z.string().optional()

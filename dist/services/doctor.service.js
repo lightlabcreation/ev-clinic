@@ -1,4 +1,4 @@
-import { prisma } from '../server';
+import { prisma } from '../server.js';
 export const getDoctorQueue = async (clinicId, doctorId) => {
     return await prisma.appointment.findMany({
         where: {
@@ -14,7 +14,7 @@ export const getDoctorQueue = async (clinicId, doctorId) => {
     });
 };
 export const saveAssessment = async (clinicId, doctorId, payload) => {
-    const { patientId, templateId, type, findings, pharmacyOrder, labOrder, radiologyOrder } = payload;
+    const { patientId, templateId, type, findings, orders = [] } = payload;
     const assessment = await prisma.medicalrecord.create({
         data: {
             clinicId,
@@ -22,40 +22,40 @@ export const saveAssessment = async (clinicId, doctorId, payload) => {
             doctorId,
             templateId,
             type,
-            data: JSON.stringify({
-                ...findings,
-                pharmacyOrder,
-                labOrder,
-                radiologyOrder
-            }),
+            data: JSON.stringify(findings),
             isClosed: true
         }
     });
-    // Create notifications for departments
-    if (pharmacyOrder) {
-        await prisma.notification.create({
+    // Create Service Orders and Notifications
+    for (const order of orders) {
+        const { type: orderType, testName, details } = order;
+        const createdOrder = await prisma.service_order.create({
             data: {
                 clinicId,
-                department: 'pharmacy',
-                message: JSON.stringify({ patientId, details: pharmacyOrder })
+                patientId,
+                doctorId,
+                type: orderType,
+                testName,
+                status: 'Pending',
+                result: details // Store instructions here for now
             }
         });
-    }
-    if (labOrder) {
+        // Notify Department
+        let dept = 'laboratory';
+        if (orderType === 'RADIOLOGY')
+            dept = 'radiology';
+        if (orderType === 'PHARMACY')
+            dept = 'pharmacy';
         await prisma.notification.create({
             data: {
                 clinicId,
-                department: 'laboratory',
-                message: JSON.stringify({ patientId, details: labOrder })
-            }
-        });
-    }
-    if (radiologyOrder) {
-        await prisma.notification.create({
-            data: {
-                clinicId,
-                department: 'radiology',
-                message: JSON.stringify({ patientId, details: radiologyOrder })
+                department: dept,
+                message: JSON.stringify({
+                    patientId,
+                    orderId: createdOrder.id,
+                    type: orderType,
+                    details: `${testName} - ${details}`
+                })
             }
         });
     }
@@ -140,95 +140,78 @@ export const getFormTemplates = async (clinicId) => {
     });
 };
 export const getAssignedPatients = async (clinicId, doctorId) => {
-    // Patients who have had an appt with this doctor OR are in the same clinic (for now restricted to clinic, but ideally doctor specific)
-    // The requirement says "only assigned patients". Strict interpretation: Patients who have an appointment or medical record with THIS doctor.
-    // 1. Find patients with appointments
-    const apptPatients = await prisma.appointment.findMany({
-        where: { clinicId, doctorId },
-        select: { patientId: true },
-        distinct: ['patientId']
-    });
-    // 2. Find patients with medical records
-    const recordPatients = await prisma.medicalrecord.findMany({
-        where: { clinicId, doctorId },
-        select: { patientId: true },
-        distinct: ['patientId']
-    });
-    const patientIds = Array.from(new Set([
-        ...apptPatients.map(p => p.patientId),
-        ...recordPatients.map(p => p.patientId)
-    ]));
-    if (patientIds.length === 0)
-        return [];
+    // Return ALL patients in the clinic to ensure doctors can find anyone registered
+    // detailed filtering can be added later if strict assignment is needed.
     return await prisma.patient.findMany({
         where: {
-            id: { in: patientIds }
+            clinicId
         },
         include: {
             // Include recent medical record for context
             medicalrecord: {
-                where: { clinicId, doctorId },
+                where: { clinicId },
                 take: 1,
                 orderBy: { createdAt: 'desc' },
                 select: { createdAt: true, type: true }
             }
-        }
+        },
+        orderBy: { createdAt: 'desc' }
     });
 };
 export const getDoctorOrders = async (clinicId, doctorId) => {
-    // Fetch notifications which serve as orders
-    // We need to parse the JSON message to filter by doctor if possible, or assume all clinic notifications?
-    // STRICT: The notification table doesn't have doctorId. 
-    // Plan B: Query MedicalRecords that have order data. This is more reliable for "My Orders".
-    const records = await prisma.medicalrecord.findMany({
+    const orders = await prisma.service_order.findMany({
         where: {
             clinicId,
-            doctorId,
-            // Filter where data contains orders - Prisma doesn't support deep JSON filtering easily in all DBs
-            // We'll fetch and filter in memory or rely on the type/fact it has data
+            doctorId
         },
-        include: { patient: { select: { name: true } } },
+        include: {
+            patient: { select: { name: true } }
+        },
         orderBy: { createdAt: 'desc' }
     });
-    const orders = [];
-    records.forEach(r => {
-        const data = JSON.parse(r.data || '{}');
-        const patientName = r.patient?.name || 'Unknown';
-        if (data.pharmacyOrder) {
-            orders.push({
-                id: `RX-${r.id}`,
-                recordId: r.id,
-                date: r.createdAt,
-                patientName,
-                type: 'Pharmacy',
-                details: data.pharmacyOrder,
-                status: 'Ordered'
-            });
-        }
-        if (data.labOrder) {
-            orders.push({
-                id: `LAB-${r.id}`,
-                recordId: r.id,
-                date: r.createdAt,
-                patientName,
-                type: 'Laboratory',
-                details: data.labOrder,
-                status: 'Ordered'
-            });
-        }
-        if (data.radiologyOrder) {
-            orders.push({
-                id: `RAD-${r.id}`,
-                recordId: r.id,
-                date: r.createdAt,
-                patientName,
-                type: 'Radiology',
-                details: data.radiologyOrder,
-                status: 'Ordered'
-            });
+    return orders.map(o => ({
+        id: o.id,
+        // recordId: o.id, 
+        date: o.createdAt,
+        patientName: o.patient?.name || 'Unknown',
+        type: o.type,
+        details: o.testName,
+        status: o.status
+    }));
+};
+export const createOrder = async (clinicId, doctorId, data) => {
+    const { patientId, type, items, priority, notes, date } = data;
+    // Normalize type
+    let orderType = 'LAB';
+    if (type.toLowerCase().includes('rad'))
+        orderType = 'RADIOLOGY';
+    if (type.toLowerCase().includes('presc') || type.toLowerCase().includes('pharm'))
+        orderType = 'PHARMACY';
+    const order = await prisma.service_order.create({
+        data: {
+            clinicId,
+            patientId: Number(patientId),
+            doctorId,
+            type: orderType,
+            testName: items,
+            status: 'Pending',
+            result: JSON.stringify({ priority, notes, date })
         }
     });
-    return orders;
+    // Notify Department
+    let dept = 'laboratory';
+    if (orderType === 'RADIOLOGY')
+        dept = 'radiology';
+    if (orderType === 'PHARMACY')
+        dept = 'pharmacy';
+    await prisma.notification.create({
+        data: {
+            clinicId,
+            department: dept,
+            message: JSON.stringify({ patientId, orderId: order.id, type: orderType, items, priority, notes })
+        }
+    });
+    return order;
 };
 export const getRevenueStats = async (clinicId, doctorId) => {
     // 1. Get all completed appointments

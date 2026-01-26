@@ -1,5 +1,5 @@
-import * as clinicService from '../services/clinic.service';
-import { asyncHandler } from '../utils/asyncHandler';
+import * as clinicService from '../services/clinic.service.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
 export const getClinicStats = asyncHandler(async (req, res) => {
     const stats = await clinicService.getClinicStats(req.clinicId);
     res.status(200).json({ success: true, data: stats });
@@ -43,4 +43,9 @@ export const getBookingConfig = asyncHandler(async (req, res) => {
 export const updateBookingConfig = asyncHandler(async (req, res) => {
     const config = await clinicService.updateBookingConfig(req.clinicId, req.body.config);
     res.status(200).json({ success: true, message: 'Booking configuration updated successfully', data: config });
+});
+export const resetPassword = asyncHandler(async (req, res) => {
+    const { password } = req.body;
+    await clinicService.resetUserPassword(req.clinicId, Number(req.params.id), password);
+    res.status(200).json({ success: true, message: 'Password reset successfully' });
 });
