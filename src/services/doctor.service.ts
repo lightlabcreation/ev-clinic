@@ -6,7 +6,7 @@ export const getDoctorQueue = async (clinicId: number, doctorId: number) => {
         where: {
             clinicId,
             doctorId,
-            // status: 'Checked In', // Show all appointments for today
+            status: { in: ['Approved', 'Confirmed', 'Checked In'] },
             date: {
                 gte: new Date(new Date().setHours(0, 0, 0, 0)),
                 lte: new Date(new Date().setHours(23, 59, 59, 999))
@@ -75,7 +75,7 @@ export const saveAssessment = async (clinicId: number, doctorId: number, payload
             clinicId,
             patientId,
             doctorId,
-            status: 'Checked In'
+            status: { in: ['Checked In', 'Confirmed', 'Approved'] }
         },
         data: { status: 'Completed' }
     });
@@ -99,6 +99,26 @@ export const getHistory = async (clinicId: number, patientId: number) => {
     }));
 };
 
+export const getAllAssessments = async (clinicId: number, doctorId: number) => {
+    const records = await prisma.medicalrecord.findMany({
+        where: { clinicId, doctorId },
+        include: {
+            formtemplate: true,
+            patient: { select: { name: true, id: true } }
+        },
+        orderBy: { createdAt: 'desc' }
+    });
+
+    return records.map(r => ({
+        ...r,
+        patientName: (r as any).patient?.name || 'Unknown',
+        patientId: (r as any).patient?.id,
+        visitDate: r.visitDate || r.createdAt,
+        date: r.visitDate || r.createdAt,
+        status: 'Completed'
+    }));
+};
+
 
 export const getDoctorStats = async (clinicId: number, doctorId: number) => {
     const today = new Date();
@@ -109,6 +129,7 @@ export const getDoctorStats = async (clinicId: number, doctorId: number) => {
             where: {
                 clinicId,
                 doctorId,
+                status: { in: ['Approved', 'Confirmed', 'Checked In', 'Completed'] },
                 date: { gte: today, lte: new Date(new Date().setHours(23, 59, 59, 999)) }
             }
         }),
@@ -120,7 +141,7 @@ export const getDoctorStats = async (clinicId: number, doctorId: number) => {
             where: { clinicId, doctorId, status: 'Completed', date: { gte: today } }
         }),
         prisma.appointment.count({
-            where: { clinicId, doctorId, status: 'Checked In', date: { gte: today } }
+            where: { clinicId, doctorId, status: { in: ['Approved', 'Confirmed', 'Checked In'] }, date: { gte: today } }
         })
     ]);
 

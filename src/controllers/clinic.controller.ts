@@ -18,15 +18,18 @@ export const createStaff = asyncHandler(async (req: AuthRequest, res: Response) 
     res.status(201).json({ success: true, message: 'Staff added successfully', data: staff });
 });
 
-export const updateStaff = async (req: AuthRequest, res: Response) => {
+export const updateStaff = asyncHandler(async (req: AuthRequest, res: Response) => {
     const staff = await clinicService.updateStaff(req.clinicId!, Number(req.params.id), req.body);
     res.status(200).json({ success: true, message: 'Staff updated successfully', data: staff });
-};
+});
 
-export const deleteStaff = async (req: AuthRequest, res: Response) => {
-    await clinicService.deleteClinicStaff(req.clinicId!, Number(req.params.id));
+export const deleteStaff = asyncHandler(async (req: AuthRequest, res: Response) => {
+    // For super admins, clinicId might not match the staff's clinic, but that's okay - they can delete from any clinic
+    // For regular admins, clinicId must match the staff's clinic
+    const clinicId = req.clinicId || 0; // Use 0 as placeholder for super admins if clinicId is not set
+    await clinicService.deleteClinicStaff(clinicId, Number(req.params.id), req.user?.role);
     res.status(200).json({ success: true, message: 'Staff deleted successfully' });
-};
+});
 
 export const getActivities = asyncHandler(async (req: AuthRequest, res: Response) => {
     const activities = await clinicService.getClinicActivities(req.clinicId!);

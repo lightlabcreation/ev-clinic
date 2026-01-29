@@ -5,8 +5,7 @@ const prisma = new PrismaClient();
 
 async function main() {
     const templates = await prisma.formtemplate.findMany();
-    console.log('Total templates found:', templates.length);
-    console.log(JSON.stringify(templates, null, 2));
+    console.log('Current templates:', JSON.stringify(templates, null, 2));
 }
 
 main()

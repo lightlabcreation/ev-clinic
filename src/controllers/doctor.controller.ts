@@ -31,6 +31,12 @@ export const getHistory = asyncHandler(async (req: AuthRequest, res: Response) =
     res.status(200).json({ status: 'success', data: history });
 });
 
+export const getAllAssessments = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const doctorId = await resolveDoctorId(req.user!.id, req.user!.clinicId!);
+    const assessments = await doctorService.getAllAssessments(req.user!.clinicId!, doctorId);
+    res.status(200).json({ status: 'success', data: assessments });
+});
+
 export const getStats = asyncHandler(async (req: AuthRequest, res: Response) => {
     const doctorId = await resolveDoctorId(req.user!.id, req.user!.clinicId!);
     const stats = await doctorService.getDoctorStats(req.user!.clinicId!, doctorId);

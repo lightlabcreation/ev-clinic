@@ -84,13 +84,25 @@ export const login = async (data: any, ip: string, device: string) => {
 
     const isSuperAdmin = roles.includes('SUPER_ADMIN') || user.role === 'SUPER_ADMIN';
 
+    // Determine the primary role for the token
     let tokenRole = user.role;
-    if (isSuperAdmin) tokenRole = 'SUPER_ADMIN';
-    else if (roles.includes('ADMIN')) tokenRole = 'ADMIN';
-
     let targetClinicId = undefined;
-    if (!isSuperAdmin && staffRecords.length === 1) {
+
+    if (isSuperAdmin) {
+        tokenRole = 'SUPER_ADMIN';
+    } else if (staffRecords.length === 1) {
+        // Single clinic staff - use their clinic role
+        tokenRole = staffRecords[0].role;
         targetClinicId = staffRecords[0].clinicId;
+    } else if (staffRecords.length > 1) {
+        // Multiple clinics - prioritize: ADMIN > DOCTOR > RECEPTIONIST
+        if (roles.includes('ADMIN')) tokenRole = 'ADMIN';
+        else if (roles.includes('DOCTOR')) tokenRole = 'DOCTOR';
+        else if (roles.includes('RECEPTIONIST')) tokenRole = 'RECEPTIONIST';
+        else tokenRole = staffRecords[0].role; // Fallback to first role
+    } else {
+        // No staff records - use user.role as is
+        tokenRole = user.role;
     }
 
     const token = signToken({
@@ -162,13 +174,25 @@ export const verifyOTP = async (data: any, ip: string, device: string) => {
 
     const isSuperAdmin = roles.includes('SUPER_ADMIN') || user.role === 'SUPER_ADMIN';
 
+    // Determine the primary role for the token
     let tokenRole = user.role;
-    if (isSuperAdmin) tokenRole = 'SUPER_ADMIN';
-    else if (roles.includes('ADMIN')) tokenRole = 'ADMIN';
-
     let targetClinicId = undefined;
-    if (!isSuperAdmin && staffRecords.length === 1) {
+
+    if (isSuperAdmin) {
+        tokenRole = 'SUPER_ADMIN';
+    } else if (staffRecords.length === 1) {
+        // Single clinic staff - use their clinic role
+        tokenRole = staffRecords[0].role;
         targetClinicId = staffRecords[0].clinicId;
+    } else if (staffRecords.length > 1) {
+        // Multiple clinics - prioritize: ADMIN > DOCTOR > RECEPTIONIST
+        if (roles.includes('ADMIN')) tokenRole = 'ADMIN';
+        else if (roles.includes('DOCTOR')) tokenRole = 'DOCTOR';
+        else if (roles.includes('RECEPTIONIST')) tokenRole = 'RECEPTIONIST';
+        else tokenRole = staffRecords[0].role; // Fallback to first role
+    } else {
+        // No staff records - use user.role as is
+        tokenRole = user.role;
     }
 
     const token = signToken({
@@ -204,14 +228,15 @@ export const verifyOTP = async (data: any, ip: string, device: string) => {
 
 export const getMyClinics = async (userId: number) => {
     const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new AppError('User not found', 404);
+
     const staffRecords = await prisma.clinicstaff.findMany({
         where: { userId },
         include: { clinic: true }
     });
 
-    const isSuperAdmin = user?.role === 'SUPER_ADMIN' || staffRecords.some(r => r.role === 'SUPER_ADMIN');
-
-    if (isSuperAdmin) {
+    // If Super Admin, show all clinics
+    if (user.role === 'SUPER_ADMIN') {
         const allClinics = await prisma.clinic.findMany();
         return allClinics.map((clinic: any) => ({
             id: clinic.id,
@@ -223,6 +248,8 @@ export const getMyClinics = async (userId: number) => {
         }));
     }
 
+    // For other users, return clinics they are assigned to
+    // They might have multiple roles in the same clinic, so we return all records
     return staffRecords.map((record: any) => ({
         id: record.clinic.id,
         name: record.clinic.name,
@@ -233,23 +260,28 @@ export const getMyClinics = async (userId: number) => {
     }));
 };
 
-export const selectClinic = async (userId: number, clinicId: number, ip: string, device: string) => {
+export const selectClinic = async (userId: number, clinicId: number, role: string, ip: string, device: string) => {
     const user = await prisma.user.findUnique({ where: { id: userId } });
-    const staffRecord = await prisma.clinicstaff.findFirst({
+    if (!user) throw new AppError('User not found', 404);
+
+    const staffRecords = await prisma.clinicstaff.findMany({
         where: { userId, clinicId }
     });
 
-    // Allow Super Admins to access any clinic
-    if (!staffRecord && user?.role !== 'SUPER_ADMIN') {
-        throw new AppError('You do not have access to this clinic', 403);
+    const isSuperAdmin = user.role === 'SUPER_ADMIN';
+    const staffRecord = staffRecords.find(r => r.role === role);
+
+    // Security check
+    if (!isSuperAdmin && !staffRecord) {
+        throw new AppError('You do not have the requested role in this clinic', 403);
     }
 
-    const role = staffRecord?.role || 'SUPER_ADMIN';
+    const finalRole = isSuperAdmin ? 'SUPER_ADMIN' : role;
 
     const token = signToken({
         id: userId,
         clinicId: clinicId,
-        role: role
+        role: finalRole
     }, '8h');
 
     // Audit Log
@@ -427,6 +459,9 @@ export const impersonateClinic = async (superAdminId: number, clinicId: number, 
         role: targetRole,
         impersonatedBy: superAdmin.email
     }, '4h');
+
+    const auditMsg = `[DEBUG] Impersonating Clinic ${clinicId} for Super Admin ${superAdmin.email}. Target User: ${targetUser.email} (ID: ${targetUser.id})\n`;
+    fs.appendFileSync(LOG_PATH, auditMsg);
 
     // 4. Auditor log
     await prisma.auditlog.create({

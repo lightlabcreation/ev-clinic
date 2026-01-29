@@ -20,6 +20,7 @@ async function main() {
     await prisma.formtemplate.deleteMany();
     await prisma.auditlog.deleteMany();
     await prisma.patient.deleteMany();
+    await prisma.subscription_invoice.deleteMany();
     await prisma.clinic.deleteMany();
     await prisma.user.deleteMany();
 

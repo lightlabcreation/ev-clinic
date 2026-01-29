@@ -46,10 +46,10 @@ export const protect = async (req: AuthRequest, res: Response, next: NextFunctio
             id: currentUser.id,
             email: currentUser.email,
             clinicId: decoded.clinicId,
-            role: decoded.role
+            role: decoded.role || currentUser.role // Use role from token if available, otherwise fallback to database
         };
 
-        const accessLog = `[${new Date().toISOString()}] ACCESS: ${req.user.email} | URL: ${req.url} | TokenRole: ${decoded.role}\n`;
+        const accessLog = `[${new Date().toISOString()}] ACCESS: ${req.user.email} | URL: ${req.url} | DbRole: ${currentUser.role} | TokenRole: ${decoded.role}\n`;
         fs.appendFileSync(LOG_PATH, accessLog);
 
         next();
@@ -68,23 +68,61 @@ export const restrictTo = (...roles: string[]) => {
     };
 };
 
+export const restrictToClinicRole = (...roles: string[]) => {
+    return async (req: AuthRequest, res: Response, next: NextFunction) => {
+        try {
+            // Super admins bypass clinic role checks
+            if (req.user?.role === 'SUPER_ADMIN') {
+                return next();
+            }
+
+            if (!req.user || !req.clinicId) {
+                return next(new AppError('No clinic context found. Please select a clinic.', 400));
+            }
+
+            // Look up the user's role in the clinicstaff table for this clinic
+            const staffRecord = await prisma.clinicstaff.findFirst({
+                where: {
+                    userId: req.user.id,
+                    clinicId: req.clinicId
+                }
+            });
+
+            if (!staffRecord) {
+                console.log(`[403 ERROR] Denied: User ${req.user?.email} | No staff record found for clinic ${req.clinicId} (UserRole: ${req.user.role})`);
+                return next(new AppError('You do not have permission to perform this action', 403));
+            }
+
+            const clinicRole = staffRecord.role;
+            if (!roles.includes(clinicRole)) {
+                console.log(`[403 ERROR] Denied: User ${req.user?.email} | Clinic Role: ${clinicRole} | Expected: ${roles.join(',')}`);
+                return next(new AppError('You do not have permission to perform this action', 403));
+            }
+
+            next();
+        } catch (error) {
+            next(error);
+        }
+    };
+};
+
 export const ensureClinicContext = async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
-        // 1. If user is Super Admin, they can access any clinic
+        // Priority order for determining clinic context:
+        // 1. Explicit clinicId in the token (Session context)
+        // 2. Fallback: Request Header (Explicit context selection)
+
+        let clinicId = req.user?.clinicId;
+        const headerId = req.headers['x-clinic-id'] ? Number(req.headers['x-clinic-id']) : undefined;
+
+        // If user is Super Admin, they can access any clinic passed in the header
         if (req.user?.role === 'SUPER_ADMIN') {
-            const headerId = req.headers['x-clinic-id'] ? Number(req.headers['x-clinic-id']) : undefined;
-            req.clinicId = req.user.clinicId || headerId;
+            req.clinicId = clinicId || headerId;
             return next();
         }
 
-        // 2. Priority: Token-locked Clinic ID (Session locking)
-        let clinicId = req.user?.clinicId;
-
-        // 3. Fallback: Header-based ID (for multi-clinic selection phase)
-        const headerId = req.headers['x-clinic-id'] ? Number(req.headers['x-clinic-id']) : undefined;
-
         if (!clinicId && headerId) {
-            // VERIFY: Does this user actually have access to this clinic?
+            // Check if user belongs to this clinic
             const membership = await prisma.clinicstaff.findFirst({
                 where: {
                     userId: req.user!.id,

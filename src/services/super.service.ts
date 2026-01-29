@@ -5,7 +5,7 @@ import { startTime } from '../utils/system.js';
 
 // ==================== CLINICS ====================
 export const createClinic = async (data: any) => {
-    const { name, location, email, contact, subscriptionDuration = 1, subscriptionPlan = 'Monthly', password } = data;
+    const { name, location, email, contact, subscriptionDuration = 1, subscriptionPlan = 'Monthly', manualDays = 30, password } = data;
 
     if (!name || !email || !contact || !password) {
         throw new AppError('Name, Email, Contact Number, and Password are all required.', 400);
@@ -21,7 +21,13 @@ export const createClinic = async (data: any) => {
 
     const start = new Date();
     const end = new Date();
-    end.setMonth(start.getMonth() + Number(subscriptionDuration));
+    if (subscriptionPlan === 'Trial') {
+        end.setDate(start.getDate() + 7);
+    } else if (subscriptionPlan === 'Manual') {
+        end.setDate(start.getDate() + Number(manualDays));
+    } else {
+        end.setMonth(start.getMonth() + Number(subscriptionDuration));
+    }
 
     // Transaction to ensure both clinic and admin/staff are created
     return await prisma.$transaction(async (tx) => {
@@ -52,7 +58,7 @@ export const createClinic = async (data: any) => {
             data: {
                 email,
                 password: hashedPassword,
-                name: `${name} Admin`,
+                name: name, // Set admin name identical to clinic name
                 phone: contact,
                 role: 'ADMIN'
             }
@@ -67,17 +73,28 @@ export const createClinic = async (data: any) => {
         });
 
         // Auto-generate first invoice
-        const amount = subscriptionPlan === 'Yearly' ? 50000 : subscriptionPlan === 'Quarterly' ? 14000 : 5000;
-        const totalAmount = amount * Number(subscriptionDuration);
+        const totalAmount = Number(data.subscriptionAmount || 0);
+        const gstPercent = Number(data.gstPercent || 0);
+        const taxAmount = (totalAmount * gstPercent) / 100;
+        const finalAmount = totalAmount + taxAmount;
 
         await tx.subscription_invoice.create({
             data: {
                 clinicId: clinic.id,
                 invoiceNumber: `INV-${Date.now()}-${clinic.id}`,
-                amount: totalAmount,
+                amount: finalAmount,
                 status: 'Unpaid',
                 dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
-                description: `Initial ${subscriptionPlan} subscription for ${subscriptionDuration} months`
+                description: JSON.stringify({
+                    base: totalAmount,
+                    tax: taxAmount,
+                    percent: gstPercent,
+                    plan: subscriptionPlan,
+                    duration: subscriptionDuration,
+                    note: subscriptionPlan === 'Trial'
+                        ? `Initial Trial subscription for 1 months`
+                        : `Initial ${subscriptionPlan} subscription for ${subscriptionDuration} months`
+                })
             }
         });
 
@@ -106,7 +123,11 @@ export const getClinics = async () => {
                 }
             },
             clinicstaff: {
-                select: { role: true }
+                include: {
+                    user: {
+                        select: { name: true, email: true }
+                    }
+                }
             },
             subscriptionInvoices: {
                 where: { status: 'Paid' },
@@ -120,9 +141,12 @@ export const getClinics = async () => {
 
         // Count roles specifically
         const doctors = clinic.clinicstaff.filter(s => s.role === 'DOCTOR').length;
-        const admins = clinic.clinicstaff.filter(s => s.role === 'ADMIN').length;
+        const admins = clinic.clinicstaff.filter(s => (s as any).role === 'ADMIN');
+        const adminName = admins.length > 0 ? (admins[0] as any).user.name : 'N/A';
+        const adminEmail = admins.length > 0 ? (admins[0] as any).user.email : 'N/A';
+        const adminCount = admins.length;
         const totalStaffRecords = clinic.clinicstaff.length;
-        const otherStaff = totalStaffRecords - doctors - admins;
+        const otherStaff = totalStaffRecords - doctors - adminCount;
 
         // Calculate Revenue
         const totalRevenue = clinic.subscriptionInvoices.reduce((sum, inv) => sum + Number(inv.amount), 0);
@@ -137,10 +161,12 @@ export const getClinics = async () => {
             modules: clinic.modules ? (typeof clinic.modules === 'string' ? JSON.parse(clinic.modules) : clinic.modules) : { pharmacy: true, radiology: false, laboratory: false, billing: true },
             isExpired,
             daysRemaining: daysRemaining > 0 ? daysRemaining : 0,
+            adminName,
+            adminEmail,
             counts: {
                 patients: clinic._count.patient,
                 doctors,
-                admins,
+                admins: adminCount,
                 staff: otherStaff > 0 ? otherStaff : 0,
                 appointments: clinic._count.appointment,
                 totalRevenue,
@@ -298,16 +324,71 @@ export const getSuperAdminReports = async (startDate?: string, endDate?: string)
 };
 
 export const updateClinic = async (id: number, data: any) => {
+    // Extract password and other non-clinic fields
+    const { password, subscriptionDuration, manualDays, ...clinicData } = data;
+
+    // If password is provided and not empty, update the admin user's password
+    if (password && password.trim() !== '') {
+        // Find the admin user for this clinic
+        const adminStaff = await prisma.clinicstaff.findFirst({
+            where: {
+                clinicId: id,
+                role: 'ADMIN'
+            },
+            include: {
+                user: true
+            }
+        });
+
+        if (adminStaff) {
+            const hashedPassword = await bcrypt.hash(password, 12);
+            await prisma.user.update({
+                where: { id: adminStaff.userId },
+                data: { password: hashedPassword }
+            });
+        }
+    }
+
+    // Handle subscription updates if provided
+    if (subscriptionDuration !== undefined || manualDays !== undefined || clinicData.subscriptionPlan) {
+        // Fetch current clinic to get existing subscription plan if not provided
+        const currentClinic = clinicData.subscriptionPlan ? null : await prisma.clinic.findUnique({
+            where: { id },
+            select: { subscriptionPlan: true, subscriptionStart: true }
+        });
+
+        const start = clinicData.subscriptionPlan ? new Date() : (currentClinic?.subscriptionStart || new Date());
+        const end = new Date();
+        const plan = clinicData.subscriptionPlan || currentClinic?.subscriptionPlan || 'Monthly';
+        const duration = subscriptionDuration || 1;
+        const days = manualDays || 30;
+
+        if (plan === 'Trial') {
+            end.setDate(start.getDate() + 7);
+        } else if (plan === 'Manual') {
+            end.setDate(start.getDate() + Number(days));
+        } else {
+            end.setMonth(start.getMonth() + Number(duration));
+        }
+
+        clinicData.subscriptionEnd = end;
+        if (clinicData.subscriptionPlan) {
+            clinicData.subscriptionStart = start;
+        }
+    }
+
+    // Update clinic with only valid clinic fields
     const clinic = await prisma.clinic.update({
         where: { id },
-        data
+        data: clinicData
     });
 
     await prisma.auditlog.create({
         data: {
             action: 'Clinic Updated',
             performedBy: 'SUPER_ADMIN',
-            details: JSON.stringify({ clinicId: id, updates: Object.keys(data) })
+            clinicId: id,
+            details: JSON.stringify({ clinicId: id, updates: Object.keys(clinicData) })
         }
     });
 
@@ -335,15 +416,44 @@ export const toggleClinicStatus = async (id: number) => {
 };
 
 export const deleteClinic = async (id: number) => {
-    await prisma.clinic.delete({ where: { id } });
+    // Verify clinic exists
+    const clinic = await prisma.clinic.findUnique({ where: { id } });
+    if (!clinic) throw new AppError('Clinic not found', 404);
 
-    await prisma.auditlog.create({
-        data: {
-            action: 'Clinic Deleted',
-            performedBy: 'SUPER_ADMIN',
-            details: JSON.stringify({ clinicId: id })
-        }
+    // Delete all related records in a transaction
+    await prisma.$transaction(async (tx) => {
+        // Create audit log before deletion
+        await tx.auditlog.create({
+            data: {
+                action: 'Clinic Deleted',
+                performedBy: 'SUPER_ADMIN',
+                clinicId: id,
+                details: JSON.stringify({ clinicId: id, clinicName: clinic.name })
+            }
+        });
+
+        // Delete records that depend on other clinic-related records first
+        await tx.formresponse.deleteMany({ where: { clinicId: id } });
+        await tx.appointment.deleteMany({ where: { clinicId: id } });
+        await tx.invoice.deleteMany({ where: { clinicId: id } });
+        await tx.medicalrecord.deleteMany({ where: { clinicId: id } });
+        await tx.service_order.deleteMany({ where: { clinicId: id } });
+
+        // Delete records that depend on clinic
+        await tx.patient.deleteMany({ where: { clinicId: id } });
+        await tx.formtemplate.deleteMany({ where: { clinicId: id } });
+        await tx.inventory.deleteMany({ where: { clinicId: id } });
+        await tx.notification.deleteMany({ where: { clinicId: id } });
+        await tx.subscription_invoice.deleteMany({ where: { clinicId: id } });
+        await tx.department.deleteMany({ where: { clinicId: id } });
+
+        // Delete clinic staff (this links users to clinics, but we don't delete users)
+        await tx.clinicstaff.deleteMany({ where: { clinicId: id } });
+
+        // Delete the clinic itself
+        await tx.clinic.delete({ where: { id } });
     });
+
     return null;
 };
 
@@ -670,10 +780,16 @@ export const resetClinicAdminPassword = async (userId: number, password: string)
 };
 
 export const updateClinicSubscription = async (id: number, data: any) => {
-    const { subscriptionPlan, subscriptionDuration } = data;
+    const { subscriptionPlan, subscriptionDuration, manualDays = 30 } = data;
     const start = new Date();
     const end = new Date();
-    end.setMonth(start.getMonth() + Number(subscriptionDuration || 1));
+    if (subscriptionPlan === 'Trial') {
+        end.setDate(start.getDate() + 7);
+    } else if (subscriptionPlan === 'Manual') {
+        end.setDate(start.getDate() + Number(manualDays));
+    } else {
+        end.setMonth(start.getMonth() + Number(subscriptionDuration || 1));
+    }
 
     const updated = await prisma.clinic.update({
         where: { id },
@@ -684,17 +800,26 @@ export const updateClinicSubscription = async (id: number, data: any) => {
     });
 
     // Generate new invoice for the renewal
-    const amount = subscriptionPlan === 'Yearly' ? 50000 : subscriptionPlan === 'Quarterly' ? 14000 : 5000;
-    const totalAmount = amount * Number(subscriptionDuration);
+    const totalAmount = Number(data.subscriptionAmount || 0);
+    const gstPercent = Number(data.gstPercent || 0);
+    const taxAmount = (totalAmount * gstPercent) / 100;
+    const finalAmount = totalAmount + taxAmount;
 
     await prisma.subscription_invoice.create({
         data: {
             clinicId: id,
             invoiceNumber: `RENW-${Date.now()}-${id}`,
-            amount: totalAmount,
+            amount: finalAmount,
             status: 'Unpaid',
             dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-            description: `${subscriptionPlan} Renewal for ${subscriptionDuration} months`
+            description: JSON.stringify({
+                base: totalAmount,
+                tax: taxAmount,
+                percent: gstPercent,
+                plan: subscriptionPlan,
+                duration: subscriptionDuration,
+                note: `${subscriptionPlan} Renewal for ${subscriptionDuration} units`
+            })
         }
     });
 
@@ -791,6 +916,33 @@ export const getStorageStats = async () => {
         available: parseFloat((total - calculatedUsage).toFixed(2)),
         percentage: Math.round((calculatedUsage / total) * 100)
     };
+};
+
+export const updateInvoiceStatus = async (id: number, status: string) => {
+    const invoice = await prisma.subscription_invoice.findUnique({
+        where: { id },
+        include: { clinic: true }
+    });
+
+    if (!invoice) throw new AppError('Invoice not found', 404);
+
+    const updated = await prisma.subscription_invoice.update({
+        where: { id },
+        data: {
+            status,
+            paidDate: status === 'Paid' ? new Date() : null
+        }
+    });
+
+    await prisma.auditlog.create({
+        data: {
+            action: 'Invoice Status Updated',
+            performedBy: 'SUPER_ADMIN',
+            details: JSON.stringify({ invoiceId: id, oldStatus: invoice.status, newStatus: status })
+        }
+    });
+
+    return updated;
 };
 
 export const triggerDatabaseBackup = async () => {

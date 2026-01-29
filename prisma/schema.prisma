@@ -16,6 +16,7 @@ model appointment {
   time        String
   status      String   @default("Pending")
   source      String   @default("Walk-in")
+  service     String?
   referenceId String?  @unique(map: "Appointment_referenceId_key")
   notes       String?  @db.Text
   fees        Decimal? @db.Decimal(10, 2)

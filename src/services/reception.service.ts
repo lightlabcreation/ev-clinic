@@ -192,7 +192,7 @@ export const updatePatientDetails = async (clinicId: number, patientId: number, 
 };
 
 export const getBookings = async (clinicId: number, date?: string) => {
-    return await prisma.appointment.findMany({
+    const appointments = await prisma.appointment.findMany({
         where: {
             clinicId,
             date: date ? {
@@ -200,8 +200,49 @@ export const getBookings = async (clinicId: number, date?: string) => {
                 lt: new Date(new Date(date).setDate(new Date(date).getDate() + 1))
             } : undefined
         },
-        include: { patient: true }
+        include: {
+            patient: true
+        },
+        orderBy: {
+            date: 'asc'
+        }
     });
+
+    // Get all unique doctor IDs from appointments
+    const doctorIds = [...new Set(appointments.map(apt => apt.doctorId))];
+
+    // Fetch all doctors in one query
+    const doctors = await prisma.clinicstaff.findMany({
+        where: {
+            id: { in: doctorIds },
+            clinicId: clinicId
+        },
+        include: {
+            user: {
+                select: { id: true, name: true }
+            }
+        }
+    });
+
+    // Create a map for quick lookup
+    const doctorMap = new Map(
+        doctors.map(doc => [
+            doc.id,
+            {
+                id: doc.id,
+                name: doc.user.name,
+                specialty: doc.specialty || null
+            }
+        ])
+    );
+
+    // Enrich appointments with doctor information
+    const enrichedAppointments = appointments.map((appointment) => ({
+        ...appointment,
+        doctor: doctorMap.get(appointment.doctorId) || null
+    }));
+
+    return enrichedAppointments;
 };
 
 export const updateBookingStatus = async (clinicId: number, id: number, status: string) => {

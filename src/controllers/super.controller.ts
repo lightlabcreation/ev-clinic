@@ -188,3 +188,10 @@ export const updateSubscription = asyncHandler(async (req: AuthRequest, res: Res
     const clinic = await superService.updateClinicSubscription(Number(req.params.id), req.body);
     res.status(200).json({ success: true, message: 'Subscription updated successfully', data: clinic });
 });
+
+export const updateInvoiceStatus = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { id } = req.params;
+    const { status } = req.body;
+    const invoice = await superService.updateInvoiceStatus(Number(id), status);
+    res.status(200).json({ success: true, message: 'Invoice status updated', data: invoice });
+});

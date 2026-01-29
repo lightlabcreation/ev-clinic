@@ -40,7 +40,8 @@ export const getMyClinics = asyncHandler(async (req: AuthRequest, res: Response)
 
 export const selectClinic = asyncHandler(async (req: AuthRequest, res: Response) => {
     const { ip, device } = getClientInfo(req);
-    const result = await authService.selectClinic(req.user!.id, req.body.clinicId, ip, device);
+    const { clinicId, role } = req.body;
+    const result = await authService.selectClinic(req.user!.id, clinicId, role, ip, device);
     res.status(200).json({
         success: true,
         message: 'Clinic context locked',

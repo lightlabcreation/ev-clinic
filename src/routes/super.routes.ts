@@ -45,6 +45,7 @@ router.post('/system/backup', superController.triggerBackup);
 // ==================== BILLING & REPORTS ====================
 router.get('/invoices', superController.getInvoices);
 router.post('/invoices', superController.generateInvoice);
+router.patch('/invoices/:id/status', superController.updateInvoiceStatus);
 router.get('/reports', superController.getReports);
 
 export default router;

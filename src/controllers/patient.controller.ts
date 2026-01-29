@@ -54,11 +54,51 @@ export const bookAppointment = async (req: Request, res: Response, next: NextFun
     }
 };
 
+
 export const getClinicDoctors = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const { clinicId } = req.params;
         const doctors = await patientService.getClinicDoctors(Number(clinicId));
         res.json({ success: true, data: doctors });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const getClinicBookingDetails = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const { clinicId } = req.params;
+        const details = await patientService.getClinicBookingDetails(Number(clinicId));
+        res.json({ success: true, data: details });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const getMyClinics = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const authReq = req as AuthRequest;
+        const email = authReq.user!.email;
+        const clinics = await patientService.getMyClinics(email);
+        res.json({ success: true, data: clinics });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const getPublicClinics = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const clinics = await patientService.getPublicClinics();
+        res.json({ success: true, data: clinics });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const publicBookAppointment = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const appointment = await patientService.publicBookAppointment(req.body);
+        res.json({ success: true, data: appointment });
     } catch (error) {
         next(error);
     }

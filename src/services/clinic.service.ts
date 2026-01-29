@@ -115,7 +115,8 @@ export const addStaff = async (clinicId: number, data: any) => {
                 password: hashedPassword,
                 name,
                 phone,
-                status: 'active'
+                status: 'active',
+                role: role.toUpperCase() as any
             }
         });
     } else if (phone && !user.phone) {
@@ -242,27 +243,57 @@ export const updateStaff = async (clinicId: number, staffId: number, data: any) 
     };
 };
 
-export const deleteClinicStaff = async (clinicId: number, staffId: number) => {
+export const deleteClinicStaff = async (clinicId: number, staffId: number, userRole?: string) => {
     const staff = await prisma.clinicstaff.findUnique({
         where: { id: staffId }
     });
 
     if (!staff) throw new AppError('Staff record not found', 404);
-    if (staff.clinicId !== clinicId) throw new AppError('Unauthorized: Staff does not belong to this clinic', 403);
 
-    // Delete clinic staff record. User account remains but unlinked.
-    await prisma.clinicstaff.delete({
-        where: { id: staffId }
-    });
+    // Super admins can delete staff from any clinic, regular admins can only delete from their own clinic
+    if (userRole !== 'SUPER_ADMIN' && staff.clinicId !== clinicId) {
+        throw new AppError('Unauthorized: Staff does not belong to this clinic', 403);
+    }
 
-    await prisma.auditlog.create({
-        data: {
-            action: 'Staff Deleted',
-            performedBy: 'ADMIN',
-            userId: staff.userId,
-            clinicId,
-            details: JSON.stringify({ staffId, note: 'User account preserved' })
+    const actualClinicId = staff.clinicId;
+
+    await prisma.$transaction(async (tx) => {
+        // 1. Check if user has other clinic associations
+        const otherAssociations = await tx.clinicstaff.count({
+            where: { userId: staff.userId, id: { not: staffId } }
+        });
+
+        // 2. Delete the specific clinic staff record
+        await tx.clinicstaff.delete({
+            where: { id: staffId }
+        });
+
+        // 3. If no other associations, delete user and their audit logs
+        if (otherAssociations === 0) {
+            // Delete audit logs first to satisfy foreign key constraints
+            await tx.auditlog.deleteMany({
+                where: { userId: staff.userId }
+            });
+
+            // Delete the user record
+            await tx.user.delete({
+                where: { id: staff.userId }
+            });
         }
+
+        // 4. Log the action (using clinic context if still exists, or global)
+        await tx.auditlog.create({
+            data: {
+                action: 'Staff Deleted',
+                performedBy: userRole === 'SUPER_ADMIN' ? 'SUPER_ADMIN' : 'ADMIN',
+                clinicId: actualClinicId,
+                details: JSON.stringify({
+                    staffId,
+                    userId: staff.userId,
+                    note: otherAssociations === 0 ? 'User and AuditLogs deleted' : 'Staff unlinked, user preserved'
+                })
+            }
+        });
     });
 
     return { success: true };

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import * as clinicController from '../controllers/clinic.controller.js';
-import { protect, restrictTo, ensureClinicContext } from '../middlewares/auth.js';
+import { protect, restrictToClinicRole, ensureClinicContext } from '../middlewares/auth.js';
 
 const router = Router();
 
@@ -8,11 +8,11 @@ const router = Router();
 router.use(protect, ensureClinicContext);
 
 // Routes accessible by ADMIN and RECEPTIONIST
-router.get('/staff', restrictTo('ADMIN', 'RECEPTIONIST'), clinicController.getClinicStaff);
-router.get('/booking-config', restrictTo('ADMIN', 'RECEPTIONIST'), clinicController.getBookingConfig);
+router.get('/staff', restrictToClinicRole('ADMIN', 'RECEPTIONIST'), clinicController.getClinicStaff);
+router.get('/booking-config', restrictToClinicRole('ADMIN', 'RECEPTIONIST'), clinicController.getBookingConfig);
 
 // Admin-only routes
-router.use(restrictTo('ADMIN'));
+router.use(restrictToClinicRole('ADMIN'));
 
 router.get('/stats', clinicController.getClinicStats);
 router.get('/activities', clinicController.getActivities);

@@ -10,6 +10,7 @@ router.get('/stats', doctorController.getStats);
 router.get('/activities', doctorController.getActivities);
 router.get('/queue', doctorController.getQueue);
 router.post('/assessments', doctorController.createAssessment);
+router.get('/assessments', doctorController.getAllAssessments);
 router.get('/history/:patientId', doctorController.getHistory);
 router.get('/templates', doctorController.getTemplates);
 router.get('/patients', doctorController.getPatients);
