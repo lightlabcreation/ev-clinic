@@ -1,4 +1,4 @@
-const API_URL = 'http://localhost:3000/api';
+const API_URL = 'https://ev-clinic-production.up.railway.app/api';
 
 async function testLogin(email: string, password: string) {
     try {

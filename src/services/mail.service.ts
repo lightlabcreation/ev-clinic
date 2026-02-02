@@ -63,7 +63,7 @@ export const sendOTP = async (email: string, otp: string) => {
 };
 
 export const sendCredentialsEmail = async (email: string, name: string, password: string) => {
-    const loginUrl = process.env.FRONTEND_URL || 'http://localhost:5173/login';
+    const loginUrl = process.env.FRONTEND_URL || 'https://ev-clinic.kiaantechnology.com/login';
 
     const html = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 10px;">
