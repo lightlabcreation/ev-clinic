@@ -1,6 +1,4 @@
 import dotenv from 'dotenv';
-// Force reload environment variables to pick up changes in .env
-delete process.env.DATABASE_URL;
 dotenv.config({ override: true });
 
 import express, { Request, Response, NextFunction } from 'express';
@@ -28,17 +26,17 @@ import { startTime } from './utils/system.js';
 const app = express();
 export const prisma = new PrismaClient();
 
-console.log('🔌 Connecting to Database URL:', process.env.DATABASE_URL);
-
 const PORT = Number(process.env.PORT) || 5000;
 
-/* -------------------- MIDDLEWARES -------------------- */
+console.log('🔌 Connecting to Database URL:', process.env.DATABASE_URL);
+
+/* -------------------- SECURITY & PERFORMANCE -------------------- */
 
 app.use(helmet());
 app.use(compression());
+app.use(morgan('dev'));
 
-/* -------------------- ✅ CORS CONFIG (FINAL) -------------------- */
-
+/* -------------------- ✅ CORS (NODE 22 SAFE) -------------------- */
 
 const allowedOrigins = [
   'https://ev-clinic.kiaantechnology.com',
@@ -49,7 +47,8 @@ const allowedOrigins = [
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin) return callback(null, true); // Postman / server calls
+      // Allow server-to-server & Postman
+      if (!origin) return callback(null, true);
 
       if (allowedOrigins.includes(origin)) {
         return callback(null, true);
@@ -68,13 +67,14 @@ app.use(
   })
 );
 
-// ✅ correct preflight handling
-app.options('*', cors());
+/* ⚠️ IMPORTANT
+   - NO manual OPTIONS handler
+   - NO app.options('*')
+   - cors() already handles preflight correctly
+*/
 
+/* -------------------- BODY PARSERS -------------------- */
 
-
-
-app.use(morgan('dev'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
@@ -106,13 +106,9 @@ app.get('/health', (_req: Request, res: Response) => {
 
 app.use(
   (err: any, _req: Request, res: Response, _next: NextFunction) => {
-    const statusCode = err.statusCode || 500;
-
-    res.status(statusCode).json({
+    res.status(err.statusCode || 500).json({
       success: false,
-      status: err.status || 'error',
-      message: err.message || 'Internal Server Error',
-      error: process.env.NODE_ENV === 'development' ? err : undefined
+      message: err.message || 'Internal Server Error'
     });
   }
 );
