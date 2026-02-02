@@ -39,6 +39,7 @@ app.use(compression());
 
 /* -------------------- ✅ CORS CONFIG (FINAL) -------------------- */
 
+
 const allowedOrigins = [
   'https://ev-clinic.kiaantechnology.com',
   'http://localhost:3000',
@@ -48,8 +49,7 @@ const allowedOrigins = [
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow Postman / server-to-server requests
-      if (!origin) return callback(null, true);
+      if (!origin) return callback(null, true); // Postman / server calls
 
       if (allowedOrigins.includes(origin)) {
         return callback(null, true);
@@ -68,13 +68,11 @@ app.use(
   })
 );
 
-/* --------- ✅ SAFE PREFLIGHT HANDLING (Node 22 Compatible) --------- */
-app.use((req, res, next) => {
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(204);
-  }
-  next();
-});
+// ✅ correct preflight handling
+app.options('*', cors());
+
+
+
 
 app.use(morgan('dev'));
 app.use(express.json({ limit: '10mb' }));
