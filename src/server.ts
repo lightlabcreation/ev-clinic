@@ -28,33 +28,18 @@ import { startTime } from './utils/system.js';
 const app = express();
 export const prisma = new PrismaClient();
 
-console.log('🔌 Connecting to Database URL:', process.env.DATABASE_URL);
+console.log("🔌 Connecting to Database URL:", process.env.DATABASE_URL); // Debug Log
 
 const PORT = Number(process.env.PORT) || 5000;
 
 /* -------------------- MIDDLEWARES -------------------- */
 
-/* ----------- ✅ FIXED & SAFE CORS CONFIG ----------- */
+app.use(helmet());
+app.use(compression());
+
 app.use(
   cors({
-    origin: (origin, callback) => {
-      const allowedOrigins = [
-        'https://ev-clinic.kiaantechnology.com',
-        'https://www.ev-clinic.kiaantechnology.com', // Added www just in case
-        'http://localhost:3000',
-        'http://localhost:5173'
-      ];
-
-      // Allow requests with no origin (like mobile apps or curl requests)
-      if (!origin) return callback(null, true);
-
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-
-      console.warn(`[CORS] Blocked request from origin: ${origin}`); // Debug log
-      return callback(new Error('CORS not allowed'));
-    },
+    origin: process.env.FRONTEND_URL || true, // ✅ Railway + Local both
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: [
@@ -66,8 +51,6 @@ app.use(
   })
 );
 
-app.use(helmet());
-app.use(compression());
 app.use(morgan('dev'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
@@ -115,7 +98,7 @@ app.use(
 
 const server = app.listen(PORT, () => {
   console.log(`
-🚀 EV Clinic HIS Backend
+🚀 EV Clinic HIS Backend (Restarted)
 --------------------------------
 Status : RUNNING
 Port   : ${PORT}
