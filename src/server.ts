@@ -28,7 +28,7 @@ import { startTime } from './utils/system.js';
 const app = express();
 export const prisma = new PrismaClient();
 
-console.log("🔌 Connecting to Database URL:", process.env.DATABASE_URL); // Debug Log
+console.log('🔌 Connecting to Database URL:', process.env.DATABASE_URL);
 
 const PORT = Number(process.env.PORT) || 5000;
 
@@ -37,9 +37,26 @@ const PORT = Number(process.env.PORT) || 5000;
 app.use(helmet());
 app.use(compression());
 
+/* ----------- ✅ FIXED & SAFE CORS CONFIG ----------- */
+
+const allowedOrigins = [
+  'https://ev-clinic.kiaantechnology.com',
+  'http://localhost:3000',
+  'http://localhost:5173'
+];
+
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL || true, // ✅ Railway + Local both
+    origin: (origin, callback) => {
+      // Allow Postman / server-to-server
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error('CORS not allowed'));
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: [
@@ -50,6 +67,9 @@ app.use(
     ]
   })
 );
+
+// 🔥 REQUIRED FOR PREFLIGHT
+app.options('*', cors());
 
 app.use(morgan('dev'));
 app.use(express.json({ limit: '10mb' }));
@@ -98,7 +118,7 @@ app.use(
 
 const server = app.listen(PORT, () => {
   console.log(`
-🚀 EV Clinic HIS Backend (Restarted)
+🚀 EV Clinic HIS Backend
 --------------------------------
 Status : RUNNING
 Port   : ${PORT}
