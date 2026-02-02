@@ -1,4 +1,4 @@
-const API_URL = 'http://localhost:3000/api';
+const API_URL = 'https://ev-clinic.kiaantechnology.com/app/api';
 
 async function testLogin(email: string, password: string) {
     try {
