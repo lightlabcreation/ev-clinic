@@ -5,38 +5,38 @@ import bcrypt from 'bcryptjs';
 export const getClinicStats = async (clinicId: number) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
 
-    const [doctorCount, staffCount, todayAppts, activeModules, totalPatients, totalInvoices] = await Promise.all([
+    const [doctorCount, staffCount, todayAppts, totalPatients, todayRevenue, pendingBills, totalRevenue] = await Promise.all([
         prisma.clinicstaff.count({ where: { clinicId, role: 'DOCTOR' } }),
         prisma.clinicstaff.count({ where: { clinicId } }),
         prisma.appointment.count({
             where: {
                 clinicId,
-                date: { gte: today }
+                date: { gte: today, lt: tomorrow }
             }
         }),
-        prisma.clinic.findUnique({
-            where: { id: clinicId },
-            select: { modules: true }
-        }),
         prisma.patient.count({ where: { clinicId } }),
+        prisma.invoice.aggregate({
+            where: { clinicId, status: 'Paid', date: { gte: today, lt: tomorrow } },
+            _sum: { amount: true }
+        }),
+        prisma.invoice.count({ where: { clinicId, status: 'Pending' } }),
         prisma.invoice.aggregate({
             where: { clinicId, status: 'Paid' },
             _sum: { amount: true }
         })
     ]);
 
-    const enabledModulesCount = activeModules?.modules
-        ? Object.values(typeof activeModules.modules === 'string' ? JSON.parse(activeModules.modules) : (activeModules.modules as any)).filter(Boolean).length
-        : 0;
-
     return {
         totalDoctors: doctorCount,
         totalStaff: staffCount,
         todayAppointments: todayAppts,
-        activeModules: enabledModulesCount,
         totalPatients,
-        revenue: totalInvoices._sum.amount ? Number(totalInvoices._sum.amount) : 0
+        todayRevenue: Number(todayRevenue._sum.amount || 0),
+        pendingBills,
+        revenue: Number(totalRevenue._sum.amount || 0)
     };
 };
 
@@ -119,10 +119,14 @@ export const addStaff = async (clinicId: number, data: any) => {
                 role: role.toUpperCase() as any
             }
         });
-    } else if (phone && !user.phone) {
+    } else {
+        // Update user's phone and role (to make this the new primary role)
         await prisma.user.update({
             where: { id: user.id },
-            data: { phone }
+            data: {
+                phone: phone || undefined,
+                role: role.toUpperCase() as any
+            }
         });
     }
 
@@ -188,15 +192,16 @@ export const updateStaff = async (clinicId: number, staffId: number, data: any) 
     if (!staff) throw new AppError('Staff record not found', 404);
     if (staff.clinicId !== clinicId) throw new AppError('Unauthorized: Staff does not belong to this clinic', 403);
 
-    // Update user info if name/email/phone/status changed
-    if (name || email || phone || status) {
+    // Update user info if name/email/phone/status/role changed
+    if (name || email || phone || status || role) {
         await prisma.user.update({
             where: { id: staff.userId },
             data: {
                 name: name || undefined,
                 email: email || undefined,
                 phone: phone || undefined,
-                status: status || undefined
+                status: status || undefined,
+                role: role ? role.toUpperCase() as any : undefined
             }
         });
     }
@@ -352,12 +357,39 @@ export const deleteFormTemplate = async (id: number) => {
     return template;
 };
 
+const DEFAULT_BOOKING_CONFIG = {
+    enabled: true,
+    services: ['Consultation', 'Follow-up', 'Emergency'],
+    timeSlots: ['09:00', '10:00', '11:00', '12:00', '14:00', '15:00', '16:00'],
+    selectedDoctors: [],
+    offDays: [0, 6],
+    holidays: [],
+    doctorAvailability: {} as Record<string, { offDays: number[]; timeSlots: string[] }>
+};
+
+/** Get availability (days + time slots) for a specific doctor. Falls back to clinic default if not set. */
+export const getDoctorAvailability = async (clinicId: number, doctorId: number) => {
+    const config = await getBookingConfig(clinicId);
+    const doctorConfig = (config.doctorAvailability || {})[String(doctorId)];
+    return {
+        offDays: doctorConfig?.offDays ?? config.offDays ?? [0, 6],
+        timeSlots: (doctorConfig?.timeSlots?.length ? doctorConfig.timeSlots : config.timeSlots) ?? DEFAULT_BOOKING_CONFIG.timeSlots
+    };
+};
+
 export const getBookingConfig = async (clinicId: number) => {
     const clinic = await prisma.clinic.findUnique({
         where: { id: clinicId },
         select: { bookingConfig: true }
     });
-    return clinic?.bookingConfig ? JSON.parse(clinic.bookingConfig) : null;
+    if (clinic?.bookingConfig) {
+        try {
+            return JSON.parse(clinic.bookingConfig);
+        } catch {
+            return DEFAULT_BOOKING_CONFIG;
+        }
+    }
+    return DEFAULT_BOOKING_CONFIG;
 };
 
 export const updateBookingConfig = async (clinicId: number, config: any) => {

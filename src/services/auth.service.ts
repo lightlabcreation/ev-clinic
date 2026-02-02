@@ -249,15 +249,22 @@ export const getMyClinics = async (userId: number) => {
     }
 
     // For other users, return clinics they are assigned to
-    // They might have multiple roles in the same clinic, so we return all records
-    return staffRecords.map((record: any) => ({
-        id: record.clinic.id,
-        name: record.clinic.name,
-        role: record.role,
-        modules: record.clinic.modules,
-        location: record.clinic.location,
-        status: record.clinic.status
-    }));
+    // Deduplicate by clinic id (user can have multiple roles in same clinic)
+    const seen = new Set<number>();
+    return staffRecords
+        .filter((record: any) => {
+            if (seen.has(record.clinic.id)) return false;
+            seen.add(record.clinic.id);
+            return true;
+        })
+        .map((record: any) => ({
+            id: record.clinic.id,
+            name: record.clinic.name,
+            role: record.role,
+            modules: record.clinic.modules,
+            location: record.clinic.location,
+            status: record.clinic.status
+        }));
 };
 
 export const selectClinic = async (userId: number, clinicId: number, role: string, ip: string, device: string) => {

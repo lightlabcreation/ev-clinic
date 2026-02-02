@@ -224,6 +224,106 @@ async function main() {
             }
         });
 
+        // Pharmacist
+        const demoPharma = await prisma.user.create({
+            data: {
+                email: 'pharma@ev-clinic.com',
+                password: adminPasswordHash,
+                name: 'Pharmacist (Demo)',
+                role: 'PHARMACY',
+                status: 'active'
+            }
+        });
+
+        await prisma.clinicstaff.create({
+            data: {
+                userId: demoPharma.id,
+                clinicId: firstClinic.id,
+                role: 'PHARMACY',
+                department: 'Pharmacy'
+            }
+        });
+
+        // Lab Technician
+        const demoLab = await prisma.user.create({
+            data: {
+                email: 'lab@ev-clinic.com',
+                password: adminPasswordHash,
+                name: 'Lab Tech (Demo)',
+                role: 'LAB',
+                status: 'active'
+            }
+        });
+
+        await prisma.clinicstaff.create({
+            data: {
+                userId: demoLab.id,
+                clinicId: firstClinic.id,
+                role: 'LAB',
+                department: 'Laboratory'
+            }
+        });
+
+        // Radiologist
+        const demoRadio = await prisma.user.create({
+            data: {
+                email: 'radio@ev-clinic.com',
+                password: adminPasswordHash,
+                name: 'Radiologist (Demo)',
+                role: 'RADIOLOGY',
+                status: 'active'
+            }
+        });
+
+        await prisma.clinicstaff.create({
+            data: {
+                userId: demoRadio.id,
+                clinicId: firstClinic.id,
+                role: 'RADIOLOGY',
+                department: 'Radiology'
+            }
+        });
+
+        // Accountant
+        const demoAccountant = await prisma.user.create({
+            data: {
+                email: 'accountant@ev-clinic.com',
+                password: adminPasswordHash,
+                name: 'Accountant (Demo)',
+                role: 'ACCOUNTANT',
+                status: 'active'
+            }
+        });
+
+        await prisma.clinicstaff.create({
+            data: {
+                userId: demoAccountant.id,
+                clinicId: firstClinic.id,
+                role: 'ACCOUNTANT',
+                department: 'Finance'
+            }
+        });
+
+        // Document Controller
+        const demoDocs = await prisma.user.create({
+            data: {
+                email: 'docs@ev-clinic.com',
+                password: adminPasswordHash,
+                name: 'Doc Controller (Demo)',
+                role: 'DOCUMENT_CONTROLLER',
+                status: 'active'
+            }
+        });
+
+        await prisma.clinicstaff.create({
+            data: {
+                userId: demoDocs.id,
+                clinicId: firstClinic.id,
+                role: 'DOCUMENT_CONTROLLER',
+                department: 'Administration'
+            }
+        });
+
         // 6. Create Case Study Data: Aisha Khan
         console.log('📝 Creating Case Study Data: Aisha Khan...');
 

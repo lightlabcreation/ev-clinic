@@ -191,10 +191,11 @@ export const updatePatientDetails = async (clinicId: number, patientId: number, 
     return updatedPatient;
 };
 
-export const getBookings = async (clinicId: number, date?: string) => {
+export const getBookings = async (clinicId: number, date?: string, patientId?: number) => {
     const appointments = await prisma.appointment.findMany({
         where: {
             clinicId,
+            patientId: patientId ? Number(patientId) : undefined,
             date: date ? {
                 gte: new Date(date),
                 lt: new Date(new Date(date).setDate(new Date(date).getDate() + 1))
@@ -243,6 +244,36 @@ export const getBookings = async (clinicId: number, date?: string) => {
     }));
 
     return enrichedAppointments;
+};
+
+/** Get appointments for a specific patient (today + upcoming, for "patient ke liye appointment hai" check) */
+export const getPatientAppointments = async (clinicId: number, patientId: number) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const appointments = await prisma.appointment.findMany({
+        where: {
+            clinicId,
+            patientId,
+            date: { gte: today }
+        },
+        include: {
+            patient: { select: { name: true } }
+        },
+        orderBy: [{ date: 'asc' }, { time: 'asc' }],
+        take: 20
+    });
+
+    const doctorIds = [...new Set(appointments.map((a: any) => a.doctorId))];
+    const doctors = await prisma.clinicstaff.findMany({
+        where: { id: { in: doctorIds }, clinicId },
+        include: { user: { select: { name: true } } }
+    });
+    const doctorMap = new Map(doctors.map(d => [d.id, d.user?.name || 'Unknown']));
+
+    return appointments.map((a: any) => ({
+        ...a,
+        doctorName: doctorMap.get(a.doctorId) || 'Unknown'
+    }));
 };
 
 export const updateBookingStatus = async (clinicId: number, id: number, status: string) => {

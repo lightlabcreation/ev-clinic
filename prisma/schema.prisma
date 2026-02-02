@@ -66,6 +66,7 @@ model clinic {
   formtemplate  formtemplate[]
   invoice       invoice[]
   medicalrecord medicalrecord[]
+  staff_document staff_document[]
   notification  notification[]
   patient       patient[]
   formresponse  formresponse[]
@@ -76,18 +77,20 @@ model clinic {
   inventory         inventory[]
   service_order     service_order[]
   subscriptionInvoices subscription_invoice[]
+  userLimit     Int             @default(5)
 }
 
 model clinicstaff {
-  id         Int              @id @default(autoincrement())
-  userId     Int
-  clinicId   Int
-  role       clinicstaff_role @default(RECEPTIONIST)
-  createdAt  DateTime         @default(now())
-  department String?
-  specialty  String?
-  clinic     clinic           @relation(fields: [clinicId], references: [id], map: "ClinicStaff_clinicId_fkey")
-  user       user             @relation(fields: [userId], references: [id], map: "ClinicStaff_userId_fkey")
+  id              Int              @id @default(autoincrement())
+  userId          Int
+  clinicId        Int
+  role            clinicstaff_role @default(RECEPTIONIST)
+  createdAt       DateTime         @default(now())
+  department      String?
+  specialty       String?
+  clinic          clinic           @relation(fields: [clinicId], references: [id], map: "ClinicStaff_clinicId_fkey")
+  user            user             @relation(fields: [userId], references: [id], map: "ClinicStaff_userId_fkey")
+  staff_document  staff_document[]
 
   @@unique([userId, clinicId, role], map: "ClinicStaff_userId_clinicId_role_key")
   @@index([clinicId], map: "ClinicStaff_clinicId_fkey")
@@ -159,6 +162,21 @@ model medicalrecord {
   @@index([clinicId], map: "MedicalRecord_clinicId_fkey")
   @@index([patientId], map: "MedicalRecord_patientId_fkey")
   @@index([templateId], map: "MedicalRecord_templateId_fkey")
+}
+
+model staff_document {
+  id        Int         @id @default(autoincrement())
+  clinicId  Int
+  staffId   Int
+  type      String
+  data      String      @db.LongText
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @default(now()) @updatedAt
+  clinic    clinic       @relation(fields: [clinicId], references: [id], map: "StaffDocument_clinicId_fkey")
+  staff     clinicstaff  @relation(fields: [staffId], references: [id], map: "StaffDocument_staffId_fkey")
+
+  @@index([clinicId], map: "StaffDocument_clinicId_fkey")
+  @@index([staffId], map: "StaffDocument_staffId_fkey")
 }
 
 model formresponse {
@@ -307,6 +325,7 @@ enum clinicstaff_role {
   RADIOLOGY
   ACCOUNTANT
   PATIENT
+  DOCUMENT_CONTROLLER
 }
 
 enum user_role {
@@ -319,4 +338,5 @@ enum user_role {
   RADIOLOGY
   ACCOUNTANT
   PATIENT
+  DOCUMENT_CONTROLLER
 }

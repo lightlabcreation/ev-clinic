@@ -3,6 +3,11 @@ import { AuthRequest } from '../middlewares/auth.js';
 import * as billingService from '../services/billing.service.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
+export const getAccountingDashboardStats = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const stats = await billingService.getAccountingDashboardStats(req.clinicId!);
+    res.status(200).json({ status: 'success', data: stats });
+});
+
 export const getInvoices = asyncHandler(async (req: AuthRequest, res: Response) => {
     const invoices = await billingService.getInvoices(req.clinicId!);
     res.status(200).json({ status: 'success', data: invoices });

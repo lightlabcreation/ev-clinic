@@ -56,6 +56,11 @@ export const getBookingConfig = asyncHandler(async (req: AuthRequest, res: Respo
     res.status(200).json({ success: true, data: config });
 });
 
+export const getDoctorAvailability = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const availability = await clinicService.getDoctorAvailability(req.clinicId!, Number(req.params.doctorId));
+    res.status(200).json({ success: true, data: availability });
+});
+
 export const updateBookingConfig = asyncHandler(async (req: AuthRequest, res: Response) => {
     const config = await clinicService.updateBookingConfig(req.clinicId!, req.body.config);
     res.status(200).json({ success: true, message: 'Booking configuration updated successfully', data: config });

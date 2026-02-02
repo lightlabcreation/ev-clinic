@@ -5,7 +5,7 @@ import { startTime } from '../utils/system.js';
 
 // ==================== CLINICS ====================
 export const createClinic = async (data: any) => {
-    const { name, location, email, contact, subscriptionDuration = 1, subscriptionPlan = 'Monthly', manualDays = 30, password } = data;
+    const { name, location, email, contact, subscriptionDuration = 1, subscriptionPlan = 'Monthly', manualDays = 30, password, numberOfUsers = 5 } = data;
 
     if (!name || !email || !contact || !password) {
         throw new AppError('Name, Email, Contact Number, and Password are all required.', 400);
@@ -29,6 +29,8 @@ export const createClinic = async (data: any) => {
         end.setMonth(start.getMonth() + Number(subscriptionDuration));
     }
 
+    const hashedPassword = await bcrypt.hash(password, 12);
+
     // Transaction to ensure both clinic and admin/staff are created
     return await prisma.$transaction(async (tx) => {
         const clinic = await tx.clinic.create({
@@ -39,11 +41,12 @@ export const createClinic = async (data: any) => {
                 email,
                 contact,
                 status: 'active',
-                modules: JSON.stringify({ pharmacy: true, radiology: false, laboratory: false, billing: true }),
+                modules: JSON.stringify({ pharmacy: true, radiology: true, laboratory: true, billing: true }),
                 subscriptionPlan,
                 subscriptionStart: start,
                 subscriptionEnd: end,
-                isActive: true
+                isActive: true,
+                userLimit: Number(numberOfUsers)
             }
         });
 
@@ -53,7 +56,6 @@ export const createClinic = async (data: any) => {
             throw new AppError('This email is already registered to another user/clinic admin.', 400);
         }
 
-        const hashedPassword = await bcrypt.hash(password, 12);
         user = await tx.user.create({
             data: {
                 email,
@@ -73,10 +75,13 @@ export const createClinic = async (data: any) => {
         });
 
         // Auto-generate first invoice
-        const totalAmount = Number(data.subscriptionAmount || 0);
+        const pricePerUser = Number(data.subscriptionAmount || 0);
+        const users = Number(numberOfUsers);
+        const totalBaseAmount = pricePerUser * users;
+
         const gstPercent = Number(data.gstPercent || 0);
-        const taxAmount = (totalAmount * gstPercent) / 100;
-        const finalAmount = totalAmount + taxAmount;
+        const taxAmount = (totalBaseAmount * gstPercent) / 100;
+        const finalAmount = totalBaseAmount + taxAmount;
 
         await tx.subscription_invoice.create({
             data: {
@@ -86,7 +91,9 @@ export const createClinic = async (data: any) => {
                 status: 'Unpaid',
                 dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
                 description: JSON.stringify({
-                    base: totalAmount,
+                    base: totalBaseAmount,
+                    pricePerUser,
+                    users,
                     tax: taxAmount,
                     percent: gstPercent,
                     plan: subscriptionPlan,
@@ -108,6 +115,9 @@ export const createClinic = async (data: any) => {
         });
 
         return { ...clinic, adminUser: { email: user.email } };
+    }, {
+        maxWait: 5000, // default: 2000
+        timeout: 20000 // default: 5000
     });
 };
 
@@ -158,7 +168,7 @@ export const getClinics = async () => {
 
         return {
             ...clinic,
-            modules: clinic.modules ? (typeof clinic.modules === 'string' ? JSON.parse(clinic.modules) : clinic.modules) : { pharmacy: true, radiology: false, laboratory: false, billing: true },
+            modules: clinic.modules ? (typeof clinic.modules === 'string' ? JSON.parse(clinic.modules) : clinic.modules) : { pharmacy: true, radiology: true, laboratory: true, billing: true },
             isExpired,
             daysRemaining: daysRemaining > 0 ? daysRemaining : 0,
             adminName,
@@ -422,12 +432,18 @@ export const deleteClinic = async (id: number) => {
 
     // Delete all related records in a transaction
     await prisma.$transaction(async (tx) => {
+        // Unlink existing audit logs to prevent foreign key errors
+        await tx.auditlog.updateMany({
+            where: { clinicId: id },
+            data: { clinicId: null }
+        });
+
         // Create audit log before deletion
         await tx.auditlog.create({
             data: {
                 action: 'Clinic Deleted',
                 performedBy: 'SUPER_ADMIN',
-                clinicId: id,
+                clinicId: null,
                 details: JSON.stringify({ clinicId: id, clinicName: clinic.name })
             }
         });
@@ -635,41 +651,27 @@ export const toggleStaffStatus = async (id: number) => {
 
 // ==================== DASHBOARD STATS ====================
 export const getDashboardStats = async () => {
-    const [totalClinics, totalStaff, totalPatients, revenueAgg] = await Promise.all([
+    const [totalClinics, activeClinics, totalUsers, totalPatients, revenueAgg, pendingSubs] = await Promise.all([
         prisma.clinic.count(),
-        prisma.clinicstaff.count(),
+        prisma.clinic.count({ where: { isActive: true } }),
+        prisma.user.count(),
         prisma.patient.count(),
         prisma.subscription_invoice.aggregate({
             where: { status: 'Paid' },
             _sum: { amount: true }
-        })
+        }),
+        prisma.subscription_invoice.count({ where: { status: 'Unpaid' } })
     ]);
 
-    // Count active modules across all clinics
-    const clinics = await prisma.clinic.findMany({ select: { modules: true } });
-    const moduleCount = clinics.reduce((acc, clinic: any) => {
-        const modules = typeof clinic.modules === 'string' ? JSON.parse(clinic.modules) : (clinic.modules || {});
-        return acc + Object.values(modules).filter(Boolean).length;
-    }, 0);
-
-    // Calculate real uptime
-    const diff = Date.now() - startTime.getTime();
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
-    const minutes = Math.floor((diff / (1000 * 60)) % 60);
-
-    let uptimeStr = '';
-    if (days > 0) uptimeStr += `${days}d `;
-    if (hours > 0 || days > 0) uptimeStr += `${hours}h `;
-    uptimeStr += `${minutes}m`;
+    const subscriptionStatus = pendingSubs === 0 ? 'Active' : `${pendingSubs} Pending`;
 
     return {
         totalClinics,
-        activeModules: moduleCount,
-        totalStaff,
+        activeClinics,
+        totalUsers,
+        totalPatients,
         totalRevenue: Number(revenueAgg._sum.amount || 0),
-        systemUptime: uptimeStr,
-        totalPatients
+        subscriptionStatus
     };
 };
 

@@ -1,9 +1,12 @@
 import dotenv from 'dotenv';
-dotenv.config();
+// Force reload environment variables to pick up changes in .env
+delete process.env.DATABASE_URL;
+dotenv.config({ override: true });
 
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import compression from 'compression';
 import morgan from 'morgan';
 import { PrismaClient } from '@prisma/client';
 
@@ -18,18 +21,21 @@ import patientRoutes from './routes/patient.routes.js';
 import formsRoutes from './routes/forms.routes.js';
 import pharmacyRoutes from './routes/pharmacy.routes.js';
 import labRoutes from './routes/lab.routes.js';
-
+import documentRoutes from './routes/document.routes.js';
 
 import { startTime } from './utils/system.js';
 
 const app = express();
 export const prisma = new PrismaClient();
 
+console.log("🔌 Connecting to Database URL:", process.env.DATABASE_URL); // Debug Log
+
 const PORT = Number(process.env.PORT) || 5000;
 
 /* -------------------- MIDDLEWARES -------------------- */
 
 app.use(helmet());
+app.use(compression());
 
 app.use(
   cors({
@@ -62,7 +68,7 @@ app.use('/api/patient', patientRoutes);
 app.use('/api/forms', formsRoutes);
 app.use('/api/pharmacy', pharmacyRoutes);
 app.use('/api/lab', labRoutes);
-
+app.use('/api/document-controller', documentRoutes);
 
 /* -------------------- HEALTH CHECK -------------------- */
 

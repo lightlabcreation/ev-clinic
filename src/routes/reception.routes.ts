@@ -9,11 +9,12 @@ router.use(protect, ensureClinicContext);
 router.get('/stats', restrictTo('RECEPTIONIST', 'ADMIN'), receptionController.getStats);
 router.get('/activities', restrictTo('RECEPTIONIST', 'ADMIN'), receptionController.getActivities);
 
-router.get('/patients', restrictTo('RECEPTIONIST', 'ADMIN', 'DOCTOR'), receptionController.getPatients);
+router.get('/patients', restrictTo('RECEPTIONIST', 'ADMIN', 'DOCUMENT_CONTROLLER', 'PHARMACY', 'ACCOUNTING', 'ACCOUNTS', 'ACCOUNTANT'), receptionController.getPatients);
 router.post('/patients', restrictTo('RECEPTIONIST', 'ADMIN'), receptionController.createPatient);
-router.patch('/patients/:id', restrictTo('RECEPTIONIST', 'ADMIN', 'DOCTOR'), receptionController.updatePatient);
+router.patch('/patients/:id', restrictTo('RECEPTIONIST', 'ADMIN', 'DOCTOR', 'PHARMACY', 'LAB', 'RADIOLOGY'), receptionController.updatePatient);
 
-router.get('/appointments', restrictTo('RECEPTIONIST', 'ADMIN', 'DOCTOR'), receptionController.getAppointments);
+router.get('/appointments', receptionController.getAppointments);
+router.get('/patients/:patientId/appointments', receptionController.getPatientAppointments);
 router.post('/appointments', restrictTo('RECEPTIONIST', 'ADMIN'), receptionController.createAppointment);
 
 router.patch('/appointments/:id/status', restrictTo('RECEPTIONIST', 'ADMIN'), receptionController.updateApptStatus);

@@ -17,6 +17,7 @@ async function main() {
     await prisma.formtemplate.deleteMany();
     await prisma.auditlog.deleteMany();
     await prisma.patient.deleteMany();
+    await prisma.subscription_invoice.deleteMany();
     await prisma.clinic.deleteMany();
     await prisma.user.deleteMany();
     console.log('✅ Database cleaned.');
@@ -118,6 +119,47 @@ async function main() {
                 specialty: 'General Medicine'
             }
         });
+        // Create Default Form Templates
+        console.log(`📝 Creating Default Assessment Templates for ${clinic.name}...`);
+        await prisma.formtemplate.create({
+            data: {
+                clinicId: clinic.id,
+                name: 'General Clinical Assessment',
+                specialty: 'General Medicine',
+                status: 'published',
+                version: 1,
+                fields: JSON.stringify([
+                    {
+                        id: 'chiefComplaint',
+                        type: 'textarea',
+                        label: 'Chief Complaint',
+                        required: true,
+                        placeholder: 'Patient\'s primary reason for visit'
+                    },
+                    {
+                        id: 'symptoms',
+                        type: 'textarea',
+                        label: 'Symptoms',
+                        required: true,
+                        placeholder: 'List of symptoms reported'
+                    },
+                    {
+                        id: 'vitals',
+                        type: 'text',
+                        label: 'Vitals (BP, HR, Temp)',
+                        required: false,
+                        placeholder: 'e.g. 120/80, 72bpm, 36.5C'
+                    },
+                    {
+                        id: 'examination',
+                        type: 'textarea',
+                        label: 'Physical Examination Findings',
+                        required: true,
+                        placeholder: 'Observations from physical exam'
+                    }
+                ])
+            }
+        });
     }
     // 5. Create Demo Users for Magic Login (matching UI)
     console.log('👤 Creating Demo Users for Magic Login UI...');
@@ -158,6 +200,96 @@ async function main() {
                 clinicId: firstClinic.id,
                 role: 'RECEPTIONIST',
                 department: 'Front Desk'
+            }
+        });
+        // Pharmacist
+        const demoPharma = await prisma.user.create({
+            data: {
+                email: 'pharma@ev-clinic.com',
+                password: adminPasswordHash,
+                name: 'Pharmacist (Demo)',
+                role: 'PHARMACY',
+                status: 'active'
+            }
+        });
+        await prisma.clinicstaff.create({
+            data: {
+                userId: demoPharma.id,
+                clinicId: firstClinic.id,
+                role: 'PHARMACY',
+                department: 'Pharmacy'
+            }
+        });
+        // Lab Technician
+        const demoLab = await prisma.user.create({
+            data: {
+                email: 'lab@ev-clinic.com',
+                password: adminPasswordHash,
+                name: 'Lab Tech (Demo)',
+                role: 'LAB',
+                status: 'active'
+            }
+        });
+        await prisma.clinicstaff.create({
+            data: {
+                userId: demoLab.id,
+                clinicId: firstClinic.id,
+                role: 'LAB',
+                department: 'Laboratory'
+            }
+        });
+        // Radiologist
+        const demoRadio = await prisma.user.create({
+            data: {
+                email: 'radio@ev-clinic.com',
+                password: adminPasswordHash,
+                name: 'Radiologist (Demo)',
+                role: 'RADIOLOGY',
+                status: 'active'
+            }
+        });
+        await prisma.clinicstaff.create({
+            data: {
+                userId: demoRadio.id,
+                clinicId: firstClinic.id,
+                role: 'RADIOLOGY',
+                department: 'Radiology'
+            }
+        });
+        // Accountant
+        const demoAccountant = await prisma.user.create({
+            data: {
+                email: 'accountant@ev-clinic.com',
+                password: adminPasswordHash,
+                name: 'Accountant (Demo)',
+                role: 'ACCOUNTANT',
+                status: 'active'
+            }
+        });
+        await prisma.clinicstaff.create({
+            data: {
+                userId: demoAccountant.id,
+                clinicId: firstClinic.id,
+                role: 'ACCOUNTANT',
+                department: 'Finance'
+            }
+        });
+        // Document Controller
+        const demoDocs = await prisma.user.create({
+            data: {
+                email: 'docs@ev-clinic.com',
+                password: adminPasswordHash,
+                name: 'Doc Controller (Demo)',
+                role: 'DOCUMENT_CONTROLLER',
+                status: 'active'
+            }
+        });
+        await prisma.clinicstaff.create({
+            data: {
+                userId: demoDocs.id,
+                clinicId: firstClinic.id,
+                role: 'DOCUMENT_CONTROLLER',
+                department: 'Administration'
             }
         });
         // 6. Create Case Study Data: Aisha Khan

@@ -34,9 +34,31 @@ export const saveAssessment = async (clinicId: number, doctorId: number, payload
         }
     });
 
+    // --- NEW: Create Consultation Invoice for Accountant ---
+    try {
+        await prisma.invoice.create({
+            data: {
+                id: `CONS-${Math.floor(1000 + Math.random() * 9000)}-${Date.now().toString().slice(-4)}`,
+                clinicId,
+                patientId,
+                doctorId,
+                service: `Consultation: ${type}`,
+                amount: 150, // Standard Consultation Fee
+                status: 'Pending',
+                date: new Date()
+            }
+        });
+        console.log(`[FINANCE] Consultation invoice created for patient ${patientId}`);
+    } catch (e) {
+        console.error('[FINANCE] Failed to create consultation invoice:', e);
+    }
+
     // Create Service Orders and Notifications
     for (const order of orders) {
-        const { type: orderType, testName, details } = order;
+        const orderType = String(order.type).toUpperCase();
+        const { testName, details } = order;
+
+        console.log(`[WORKFLOW] Creating ${orderType} order for patient ${patientId} in clinic ${clinicId}`);
 
         const createdOrder = await prisma.service_order.create({
             data: {
@@ -99,9 +121,45 @@ export const getHistory = async (clinicId: number, patientId: number) => {
     }));
 };
 
-export const getAllAssessments = async (clinicId: number, doctorId: number) => {
+export const getPatientFullProfile = async (clinicId: number, patientId: number) => {
+    const [patient, medicalRecords, serviceOrders] = await Promise.all([
+        prisma.patient.findUnique({
+            where: { id: patientId }
+        }),
+        prisma.medicalrecord.findMany({
+            where: { clinicId, patientId },
+            include: { formtemplate: { select: { name: true } } },
+            orderBy: { createdAt: 'desc' }
+        }),
+        prisma.service_order.findMany({
+            where: { clinicId, patientId },
+            orderBy: { createdAt: 'desc' }
+        })
+    ]);
+
+    if (!patient) throw new AppError('Patient not found', 404);
+
+    return {
+        patient,
+        medicalRecords: medicalRecords.map(r => ({
+            ...r,
+            data: r.data ? JSON.parse(r.data) : {}
+        })),
+        serviceOrders: serviceOrders.map(o => ({
+            ...o,
+            result: o.result && (o.result.startsWith('{') || o.result.startsWith('[')) ? JSON.parse(o.result) : o.result
+        }))
+    };
+};
+
+export const getAllAssessments = async (clinicId: number, doctorId?: number) => {
+    const where: any = { clinicId };
+    if (doctorId) {
+        where.doctorId = doctorId;
+    }
+
     const records = await prisma.medicalrecord.findMany({
-        where: { clinicId, doctorId },
+        where,
         include: {
             formtemplate: true,
             patient: { select: { name: true, id: true } }
@@ -169,28 +227,66 @@ export const getDoctorActivities = async (clinicId: number, doctorId: number) =>
 };
 
 export const getFormTemplates = async (clinicId: number) => {
-    return await prisma.formtemplate.findMany({
+    console.log(`[DOCTOR SERVICE] Fetching templates for Clinic ID: ${clinicId}`);
+
+    // Fetch both clinic-specific and global (null) templates
+    const templates = await prisma.formtemplate.findMany({
         where: {
             OR: [
-                { clinicId: clinicId },
+                { clinicId: Number(clinicId) },
                 { clinicId: null }
             ],
             status: 'published'
         },
         orderBy: { name: 'asc' }
     });
+
+    // Fallback: If no published templates found, return all available for this clinic (for debugging/setup)
+    if (templates.length === 0) {
+        return await prisma.formtemplate.findMany({
+            where: {
+                OR: [
+                    { clinicId: Number(clinicId) },
+                    { clinicId: null }
+                ]
+            },
+            orderBy: { name: 'asc' }
+        });
+    }
+
+    return templates;
+};
+
+export const getTemplateById = async (clinicId: number, templateId: number) => {
+    const template = await prisma.formtemplate.findUnique({
+        where: { id: templateId }
+    });
+
+    if (!template) throw new AppError('Template not found', 404);
+
+    // Authorization: Must be global or belong to this clinic
+    if (template.clinicId && template.clinicId !== clinicId) {
+        throw new AppError('Unauthorized access to this template', 403);
+    }
+
+    return {
+        ...template,
+        fields: typeof template.fields === 'string' ? JSON.parse(template.fields) : template.fields
+    };
 };
 
 export const getAssignedPatients = async (clinicId: number, doctorId: number) => {
-    // Return ALL patients in the clinic to ensure doctors can find anyone registered
-    // detailed filtering can be added later if strict assignment is needed.
-
+    // Return only patients who have an appointment booked with this doctor (by reception / booking link)
     return await prisma.patient.findMany({
         where: {
-            clinicId
+            clinicId,
+            appointment: {
+                some: {
+                    doctorId
+                }
+            }
         },
         include: {
-            // Include recent medical record for context
             medicalrecord: {
                 where: { clinicId },
                 take: 1,
@@ -233,15 +329,29 @@ export const createOrder = async (clinicId: number, doctorId: number, data: any)
     if (type.toLowerCase().includes('rad')) orderType = 'RADIOLOGY';
     if (type.toLowerCase().includes('presc') || type.toLowerCase().includes('pharm')) orderType = 'PHARMACY';
 
+    let testName = typeof items === 'string' ? items : '';
+    let resultPayload: any = { priority, notes, date };
+
+    if (orderType === 'PHARMACY' && Array.isArray(items) && items.length > 0) {
+        const prescriptionItems = items.map((i: any) => ({
+            inventoryId: i.inventoryId,
+            medicineName: i.medicineName || i.name,
+            quantity: Number(i.quantity) || 1,
+            unitPrice: Number(i.unitPrice) || 0
+        }));
+        testName = prescriptionItems.map((i: any) => `${i.medicineName} x${i.quantity}`).join(', ');
+        resultPayload.items = prescriptionItems;
+    }
+
     const order = await prisma.service_order.create({
         data: {
             clinicId,
             patientId: Number(patientId),
             doctorId,
             type: orderType,
-            testName: items,
+            testName: testName || (typeof items === 'string' ? items : 'Prescription'),
             status: 'Pending',
-            result: JSON.stringify({ priority, notes, date })
+            result: JSON.stringify(resultPayload)
         }
     });
 

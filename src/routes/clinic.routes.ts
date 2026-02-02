@@ -8,8 +8,10 @@ const router = Router();
 router.use(protect, ensureClinicContext);
 
 // Routes accessible by ADMIN and RECEPTIONIST
-router.get('/staff', restrictToClinicRole('ADMIN', 'RECEPTIONIST'), clinicController.getClinicStaff);
-router.get('/booking-config', restrictToClinicRole('ADMIN', 'RECEPTIONIST'), clinicController.getBookingConfig);
+// Routes accessible by all clinic roles (Read-only)
+router.get('/staff', clinicController.getClinicStaff);
+router.get('/booking-config', clinicController.getBookingConfig);
+router.get('/booking-config/doctor/:doctorId', clinicController.getDoctorAvailability);
 
 // Admin-only routes
 router.use(restrictToClinicRole('ADMIN'));

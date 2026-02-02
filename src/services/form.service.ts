@@ -4,10 +4,11 @@ import { AppError } from '../utils/AppError.js';
 // ==================== TEMPLATES ====================
 
 export const getTemplates = async (clinicId: number) => {
+    console.log(`[FORM SERVICE] Fetching templates for Clinic ID: ${clinicId}`);
     return await prisma.formtemplate.findMany({
         where: {
             OR: [
-                { clinicId: clinicId },
+                { clinicId: Number(clinicId) },
                 { clinicId: null }
             ]
         },

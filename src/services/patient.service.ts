@@ -171,7 +171,7 @@ export const bookAppointment = async (userId: number, email: string, data: Creat
 
 export const publicBookAppointment = async (data: any) => {
     try {
-        const { name, email, phone, clinicId, doctorId, date, time, notes, service } = data;
+        const { name, email, phone, clinicId, doctorId, date, time, notes, service, password } = data;
 
         if (!email) throw new AppError('Email is required', 400);
         if (!clinicId || isNaN(Number(clinicId))) throw new AppError('Valid Clinic ID is required', 400);
@@ -181,13 +181,16 @@ export const publicBookAppointment = async (data: any) => {
         // 1. Find or create User - and UPDATE if exists
         let user = await prisma.user.findUnique({ where: { email } });
         if (!user) {
-            const dummyPassword = await bcrypt.hash('Patient123!', 12);
+            const finalPassword = password
+                ? await bcrypt.hash(password, 12)
+                : await bcrypt.hash('Patient123!', 12);
+
             user = await prisma.user.create({
                 data: {
                     email,
                     name,
                     phone: phone || '',
-                    password: dummyPassword,
+                    password: finalPassword,
                     role: 'PATIENT'
                 }
             });
